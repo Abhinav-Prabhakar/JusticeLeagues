@@ -135,7 +135,7 @@ export function listLeagues(db: Db): LeagueDTO[] {
         COALESCE((SELECT SUM(p.delta) FROM points_ledger p WHERE p.chapter_id = c.id), 0) AS ledger_points
        FROM chapters c
        JOIN neighborhoods n ON n.id = c.neighborhood_id
-       ORDER BY c.name`,
+       ORDER BY c.league_id, (c.id = 'ch_' || c.league_id) DESC, c.name`,
     )
     .all() as unknown as ChapterRow[];
 
@@ -383,8 +383,23 @@ function joinWithinTransaction(db: Db, profileId: string, leagueId: string): boo
     throw new AppError(409, "league_closed", "This league is not taking new members right now.");
   }
 
-  const chapter = db.prepare("SELECT id FROM chapters WHERE league_id = ? ORDER BY name LIMIT 1").get(leagueId) as
-    { id: string } | undefined;
+  // Prefer the member's home chapter; otherwise file them under the founding
+  // chapter. Pass the profile so home_neighborhood resolves in one query.
+  const chapter = db
+    .prepare(
+      `SELECT c.id
+         FROM chapters c
+         JOIN profiles p ON p.id = ?
+        WHERE c.league_id = ?
+        ORDER BY CASE
+                   WHEN c.neighborhood_id = p.home_neighborhood THEN 0
+                   WHEN c.id = 'ch_' || c.league_id THEN 1
+                   ELSE 2
+                 END,
+                 c.name
+        LIMIT 1`,
+    )
+    .get(profileId, leagueId) as { id: string } | undefined;
 
   const existing = db
     .prepare("SELECT status FROM league_members WHERE league_id = ? AND profile_id = ?")

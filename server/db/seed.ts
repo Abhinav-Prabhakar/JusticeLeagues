@@ -39,7 +39,7 @@ export function seedIfEmpty(db: Db): boolean {
       CITY.lng,
     );
 
-    const hoods = [...new Set(LEAGUES.map((l) => l.hood))];
+    const hoods = [...new Set(LEAGUES.map((l) => l.hood))].sort();
     const insertHood = db.prepare(
       "INSERT INTO neighborhoods (id, city_id, name, slug) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
     );
@@ -88,8 +88,26 @@ export function seedIfEmpty(db: Db): boolean {
         league.id,
         `nb_${slugify(league.hood)}`,
         `${league.hood} chapter`,
-        league.points,
+        Math.round(league.points * 0.6),
       );
+
+      // A citywide league rolls up neighbourhood chapters. The founding
+      // chapter keeps the majority of the sealed history; the next two
+      // neighbourhoods by name carry the rest, so chapter totals still sum
+      // to the league total.
+      const others = hoods.filter((hood) => hood !== league.hood).slice(0, 2);
+      const founding = Math.round(league.points * 0.6);
+      const second = Math.round(league.points * 0.25);
+      const shares = [founding, second, league.points - founding - second];
+      others.forEach((hood, index) => {
+        insertChapter.run(
+          `ch_${league.id}_${index + 2}`,
+          league.id,
+          `nb_${slugify(hood)}`,
+          `${hood} chapter`,
+          shares[index + 1],
+        );
+      });
     }
 
     const insertShift = db.prepare(`

@@ -59,7 +59,10 @@ await page.getByLabel("Password", { exact: true }).fill(password);
 await page.getByRole("button", { name: /open account/i }).click();
 await page.waitForURL(/\/leagues\/harbor$/);
 await page.getByRole("button", { name: /^join league$/i }).click();
-await page.getByRole("button", { name: /^you're in$/i }).first().waitFor();
+await page
+  .getByRole("button", { name: /^you're in$/i })
+  .first()
+  .waitFor();
 
 const shift = page.locator("div.group").filter({ hasText: "Storm-drain stencilling" });
 await shift.getByRole("button", { name: /^sign up$/i }).click();

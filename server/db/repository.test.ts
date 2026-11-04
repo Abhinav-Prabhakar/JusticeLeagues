@@ -17,13 +17,10 @@ import {
 
 let db: Db;
 
-function makeProfile(id: string) {
-  db.prepare("INSERT INTO profiles (id, email, password_hash, handle, display_name) VALUES (?, ?, 'x', ?, ?)").run(
-    id,
-    `${id}@example.com`,
-    id,
-    id,
-  );
+function makeProfile(id: string, homeNeighborhood: string | null = null) {
+  db.prepare(
+    "INSERT INTO profiles (id, email, password_hash, handle, display_name, home_neighborhood) VALUES (?, ?, 'x', ?, ?, ?)",
+  ).run(id, `${id}@example.com`, id, id, homeNeighborhood);
 }
 
 beforeEach(() => {
@@ -40,11 +37,13 @@ describe("seed", () => {
     const harbor = listLeagues(db).find((league) => league.id === "harbor")!;
     expect(harbor.points).toBe(48210);
     expect(harbor.members).toBe(1284);
+    expect(harbor.chapters).toHaveLength(3);
     expect(harbor.chapters[0].hood).toBe("Mill River Docks");
   });
 
   it("chapter points roll up to the league", () => {
     for (const league of listLeagues(db)) {
+      expect(league.chapters).toHaveLength(3);
       const chapterTotal = league.chapters.reduce((sum, chapter) => sum + chapter.points, 0);
       expect(chapterTotal).toBe(league.points);
     }
@@ -62,6 +61,8 @@ describe("membership", () => {
     expect(me.points).toBe(JOIN_POINTS);
     expect(me.ledger).toHaveLength(1);
     expect(me.memberships[0].status).toBe("active");
+    expect(me.memberships[0].chapterId).toBe("ch_harbor");
+    expect(me.memberships[0].points).toBe(JOIN_POINTS);
 
     const league = listLeagues(db).find((item) => item.id === "harbor")!;
     expect(league.points).toBe(48210 + JOIN_POINTS);
@@ -91,6 +92,12 @@ describe("membership", () => {
     const result = signupShift(db, "usr_d", "s11");
     expect(result.autoJoined).toBe(true);
     expect(getMe(db, "usr_d").memberships[0].leagueId).toBe("harbor");
+  });
+
+  it("files a member under their home chapter when the league has one", () => {
+    makeProfile("usr_home", "nb_city-centre");
+    joinLeague(db, "usr_home", "harbor");
+    expect(getMe(db, "usr_home").memberships[0].chapterId).toBe("ch_harbor_2");
   });
 });
 
