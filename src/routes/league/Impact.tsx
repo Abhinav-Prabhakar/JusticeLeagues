@@ -1,23 +1,39 @@
 import { useState, type FormEvent } from "react";
-import { CalendarCheck, FilePlus2, Hourglass, Sparkles, TrendingUp, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  BarChart3,
+  CalendarCheck,
+  ExternalLink,
+  FilePlus2,
+  Hourglass,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { CAUSES, fmt } from "../../data";
 import { PROJECT_MAX_POINTS, PROJECT_MIN_POINTS, projectPoints } from "../../data/projects";
 import { activeMembership } from "../../lib/api";
-import { useSubmitProject } from "../../lib/queries";
+import { useImpact, useSubmitProject } from "../../lib/queries";
 import { Photo, SectionHead } from "../../ui";
 import { useLeagueContext } from "./context";
+import { cn } from "../../utils/cn";
 
 export default function LeagueImpact() {
   const { league: l, edition } = useLeagueContext();
   const c = CAUSES[l.cause];
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
-  const wins = edition.wins.filter((win) => win.league === l.id);
-  const total = l.points || 1;
-  const peak = Math.max(...l.chapters.map((chapter) => chapter.points), 1);
-  const hours = l.hours;
-
   const membership = activeMembership(edition.me, l.id);
   const submit = useSubmitProject();
+  const { data: impact } = useImpact(l.id);
+
+  const totals = impact?.totals ?? null;
+  const byChapter = impact?.byChapter ?? [];
+  const byCategory = (impact?.byCategory ?? []).filter((category) => category.points !== 0);
+  const byMonth = impact?.byMonth ?? [];
+  const projects = impact?.projects ?? [];
+  const peak = Math.max(...byChapter.map((chapter) => chapter.points), 1);
+  const monthPeak = Math.max(...byMonth.map((month) => Math.abs(month.points)), 1);
+
   const [form, setForm] = useState({
     chapterId: l.chapters[0]?.id ?? "",
     title: "",
@@ -62,17 +78,22 @@ export default function LeagueImpact() {
         }
         right={
           <span className="text-ink-3 flex items-center gap-1.5 font-mono text-[11px]">
-            <TrendingUp size={13} /> {l.delta > 0 ? `+${l.delta}` : l.delta} this month
+            <TrendingUp size={13} /> {l.delta > 0 ? `+${l.delta}` : l.delta}% pace this month
           </span>
         }
       />
 
       <div className="border-ink grid grid-cols-2 border-y-2 md:grid-cols-4">
         {[
-          { icon: CalendarCheck, value: l.projects, label: "Projects delivered", tone: "#d9381e" },
-          { icon: Hourglass, value: `${(hours / 1000).toFixed(1)}k`, label: "Hours given", tone: "#2347c5" },
+          { icon: CalendarCheck, value: fmt(totals?.projects ?? l.projects), label: "Projects delivered", tone: "#d9381e" },
+          {
+            icon: Hourglass,
+            value: `${((totals?.hours ?? l.hours) / 1000).toFixed(1)}k`,
+            label: "Hours given",
+            tone: "#2347c5",
+          },
           { icon: Users, value: fmt(l.members), label: "Members", tone: color },
-          { icon: Sparkles, value: fmt(l.points), label: "Justice Points", tone: "#1b7f5c" },
+          { icon: Sparkles, value: fmt(totals?.points ?? l.points), label: "Justice Points", tone: "#1b7f5c" },
         ].map((stat, index) => (
           <div
             key={stat.label}
@@ -225,79 +246,165 @@ export default function LeagueImpact() {
               Chapter by <em>chapter</em>
             </>
           }
+          right={
+            <span className="text-ink-3 font-mono text-[11px]">
+              {byChapter.reduce((sum, chapter) => sum + chapter.projects, 0)} approved here
+            </span>
+          }
         />
         <div className="space-y-4">
-          {l.chapters.map((chapter, index) => {
-            const share = Math.round((chapter.points / total) * 100);
-            return (
-              <div key={chapter.id}>
-                <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                  <span className="font-display flex items-baseline gap-2 text-base font-bold">
-                    {chapter.hood}
-                    {index === 0 && <span className="kicker text-forest text-[8px]">Founding</span>}
-                  </span>
-                  <span className="text-ink-2 font-mono text-[10px]">
-                    {fmt(chapter.points)} JP · {share}%
-                  </span>
-                </div>
-                <div className="bg-paper-3 border-ink/30 h-3 overflow-hidden border">
-                  <div
-                    className="h-full transition-[width] duration-700"
-                    style={{ width: `${Math.max((chapter.points / peak) * 100, 2)}%`, background: color }}
-                  />
-                </div>
+          {byChapter.length === 0 && (
+            <p className="text-ink-3 font-serif text-sm">The chapter ledger is still being assembled.</p>
+          )}
+          {byChapter.map((chapter, index) => (
+            <div key={chapter.chapterId}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                <span className="font-display flex items-baseline gap-2 text-base font-bold">
+                  {chapter.hood}
+                  {index === 0 && <span className="kicker text-forest text-[8px]">Leading</span>}
+                </span>
+                <span className="text-ink-2 font-mono text-[10px]">
+                  {fmt(chapter.points)} JP · {chapter.share}%
+                </span>
               </div>
-            );
-          })}
+              <div className="bg-paper-3 border-ink/30 h-3 overflow-hidden border">
+                <div
+                  className="h-full transition-[width] duration-700"
+                  style={{ width: `${Math.max((chapter.points / peak) * 100, 2)}%`, background: color }}
+                />
+              </div>
+              <div className="text-ink-3 mt-1 flex items-center gap-3 font-mono text-[9px]">
+                <span>{chapter.name}</span>
+                {chapter.monthPoints !== 0 && (
+                  <span className={chapter.monthPoints > 0 ? "text-forest" : "text-vermilion"}>
+                    {chapter.monthPoints > 0 ? "+" : ""}
+                    {fmt(chapter.monthPoints)} this month
+                  </span>
+                )}
+                <span className="ml-auto">{chapter.projects} projects</span>
+              </div>
+            </div>
+          ))}
         </div>
         <p className="text-ink-3 mt-4 font-mono text-[10px]">
-          Bars are scaled to the largest chapter. Totals always add up to {fmt(l.points)} JP.
+          Bars are scaled to the largest chapter. Chapter totals add up to {fmt(totals?.points ?? l.points)} JP — never
+          more.
         </p>
       </section>
 
-      {wins.length > 0 && (
-        <section>
-          <SectionHead
-            kicker="On the record"
-            title={
-              <>
-                Recent <em>wins</em>
-              </>
-            }
-            right={
-              <span className="text-ink-3 font-mono text-[11px]">
-                {wins.length} filed{edition.wins.length > wins.length ? ` · ${edition.wins.length} citywide` : ""}
-              </span>
-            }
-          />
+      <section className="grid gap-10 lg:grid-cols-2">
+        <div>
+          <h3 className="font-display mb-4 flex items-center gap-2 text-2xl font-bold italic">
+            <BarChart3 size={20} className="text-vermilion" /> How the points were earned
+          </h3>
+          <ul className="divide-ink/20 border-ink divide-y-2 border-y-2">
+            {byCategory.map((category) => (
+              <li key={category.key} className="flex items-baseline gap-3 py-2.5">
+                <span className="min-w-0 flex-1 truncate font-serif text-sm">{category.label}</span>
+                <span className="text-ink-3 font-mono text-[10px]">{category.entries} entries</span>
+                <span
+                  className={cn(
+                    "w-20 text-right font-mono text-sm font-semibold tabular-nums",
+                    category.points < 0 && "text-vermilion",
+                  )}
+                >
+                  {category.points > 0 ? "+" : ""}
+                  {fmt(category.points)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-ink-3 mt-2 font-mono text-[9px]">
+            Imported chapter history is the sealed printed edition. It counts toward totals but has no local author.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="font-display mb-4 flex items-center gap-2 text-2xl font-bold italic">
+            <TrendingUp size={20} className="text-forest" /> Points, by month
+          </h3>
+          {byMonth.length === 0 ? (
+            <p className="text-ink-3 font-serif text-sm">Monthly totals appear once the live ledger has entries.</p>
+          ) : (
+            <>
+              <div className="border-ink flex h-40 items-end gap-1.5 border-b-2">
+                {byMonth.map((month) => (
+                  <div key={month.month} className="group relative flex h-full flex-1 flex-col justify-end">
+                    <div
+                      className="border-ink border-2 border-b-0 transition-colors"
+                      style={{
+                        height: `${Math.max((Math.abs(month.points) / monthPeak) * 100, 2)}%`,
+                        background: month.points < 0 ? "#d9381e" : color,
+                      }}
+                      title={`${month.label}: ${fmt(month.points)} JP`}
+                    />
+                    <span className="text-ink-3 mt-1 text-center font-mono text-[9px]">{month.label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-ink-3 mt-2 font-mono text-[9px]">
+                Last twelve calendar months, straight from the ledger.
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <SectionHead
+          kicker="On the record"
+          title={
+            <>
+              Recent <em>wins</em>
+            </>
+          }
+          right={
+            <Link to="/ledger" className="kicker hover:text-vermilion flex items-center gap-1">
+              <ExternalLink size={11} /> Public ledger
+            </Link>
+          }
+        />
+        {projects.length === 0 ? (
+          <div className="border-ink/40 border-2 border-dashed py-10 text-center">
+            <p className="font-display text-ink-3 text-lg italic">No wins filed yet. The first one is the hardest.</p>
+          </div>
+        ) : (
           <div className="grid gap-5 md:grid-cols-2">
-            {wins.map((win) => (
-              <article key={win.id} className="hover-color group border-ink flex flex-col border-2">
-                <Photo id={win.photo} w={640} h={360} alt="" className="border-ink aspect-[16/9] w-full border-b-2" />
+            {projects.map((project) => (
+              <article key={project.id} className="hover-color group border-ink flex flex-col border-2">
+                <Photo id={l.photo} w={640} h={360} alt="" className="border-ink aspect-[16/9] w-full border-b-2" />
                 <div className="flex flex-1 flex-col p-4">
                   <div className="kicker text-vermilion flex items-center gap-1.5">
-                    <Sparkles size={11} /> +{win.jp} JP
+                    <Sparkles size={11} /> +{project.points} JP
                   </div>
-                  <h3 className="font-display mt-1 text-lg leading-tight font-bold">{win.title}</h3>
-                  {win.summary && <p className="text-ink-2 mt-1 line-clamp-2 font-serif text-xs">{win.summary}</p>}
+                  <h3 className="font-display mt-1 text-lg leading-tight font-bold">{project.title}</h3>
+                  {project.chapterName && (
+                    <div className="text-ink-3 mt-1 font-mono text-[10px]">{project.chapterName}</div>
+                  )}
                   <div className="text-ink-2 mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-3 font-mono text-[10px]">
-                    <span>{win.facts.people} people</span>
-                    <span>{win.facts.hours} hours</span>
-                    <span className="font-semibold">{win.facts.amount}</span>
-                    <span className="text-ink-3 ml-auto">{win.when}</span>
+                    <span>{project.people} people</span>
+                    <span>{project.hours} hours</span>
+                    {project.amount && <span className="font-semibold">{project.amount}</span>}
+                    {project.evidenceUrl && (
+                      <a
+                        href={project.evidenceUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="hover:text-vermilion flex items-center gap-1 underline underline-offset-2"
+                      >
+                        Evidence <ExternalLink size={9} />
+                      </a>
+                    )}
+                    <span className="text-ink-3 ml-auto">
+                      {new Date(project.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-        </section>
-      )}
-
-      {wins.length === 0 && (
-        <div className="border-ink/40 border-2 border-dashed py-10 text-center">
-          <p className="font-display text-ink-3 text-lg italic">No wins filed yet. The first one is the hardest.</p>
-        </div>
-      )}
+        )}
+      </section>
     </div>
   );
 }

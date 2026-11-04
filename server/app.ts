@@ -121,6 +121,7 @@ const ledgerQuerySchema = z.object({
   league: z.string().trim().max(80).optional(),
   type: z.string().trim().max(40).optional(),
   profile: z.string().trim().max(80).optional(),
+  live: z.enum(["1"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -261,7 +262,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     if (!parsed.success) {
       return c.json({ error: "Check the ledger filters.", code: "invalid_query" }, 400);
     }
-    const { league, type, profile, limit, offset } = parsed.data;
+    const { league, type, profile, live, limit, offset } = parsed.data;
     return c.json(
       listPublicLedger(db, {
         leagueId: league ?? null,
@@ -269,6 +270,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
         profileId: profile ?? null,
         limit,
         offset,
+        liveOnly: live === "1",
       }),
     );
   });

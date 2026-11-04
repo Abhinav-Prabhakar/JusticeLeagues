@@ -16,6 +16,7 @@ const LeagueImpact = lazy(() => import("./routes/league/Impact"));
 const LeagueSteward = lazy(() => import("./routes/league/Steward"));
 const LeagueSettings = lazy(() => import("./routes/league/Settings"));
 const Dashboard = lazy(() => import("./routes/Dashboard"));
+const LedgerPage = lazy(() => import("./routes/LedgerPage"));
 const Login = lazy(() => import("./routes/Login"));
 const Register = lazy(() => import("./routes/Register"));
 const JoinInvite = lazy(() => import("./routes/JoinInvite"));
@@ -27,6 +28,7 @@ export default function App() {
         <Route element={<RootLayout />}>
           <Route index element={<Home />} />
           <Route path="leagues" element={<Leagues />} />
+          <Route path="ledger" element={<LedgerPage />} />
           <Route path="leagues/:id" element={<LeaguePage />}>
             <Route index element={<LeagueOverview />} />
             <Route path="shifts" element={<LeagueShifts />} />

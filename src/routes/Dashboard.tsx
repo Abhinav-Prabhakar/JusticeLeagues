@@ -3,6 +3,7 @@ import { CalendarDays, Clock, LogIn, LogOut, MapPin, Plus, Sparkles, Users } fro
 import { CAUSES, fmt } from "../data";
 import { Emblem, SectionHead } from "../ui";
 import { JoinButton } from "../components/JoinButton";
+import { BadgeShelf, StreakCard } from "../components/BadgeShelf";
 import { usePageTitle } from "../lib/usePageTitle";
 import { useAuth, useEdition, useCancelShift, useSignupShift } from "../lib/queries";
 import { isSignedUp } from "../lib/api";
@@ -91,7 +92,8 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid gap-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
-            <section className="border-ink bg-ink text-paper border-2 p-6">
+            <div className="space-y-4">
+              <section className="border-ink bg-ink text-paper border-2 p-6">
               <div className="kicker text-mustard">Your Justice Points</div>
               <div className="mt-2 flex items-end gap-2">
                 <span className="font-display text-6xl leading-none font-black">{fmt(me.points)}</span>
@@ -112,6 +114,8 @@ export default function Dashboard() {
                 </div>
               </div>
             </section>
+            <StreakCard streak={me.streak} />
+          </div>
 
             <section>
               <div className="mb-4 flex items-center gap-3">
@@ -260,6 +264,23 @@ export default function Dashboard() {
                 ))}
               </ol>
             )}
+          </section>
+
+          <section>
+            <SectionHead
+              kicker="The marks you carry"
+              title={
+                <>
+                  Badges &amp; <em>weeks on</em>
+                </>
+              }
+              right={
+                <span className="text-ink-3 flex items-center gap-1.5 font-mono text-[11px]">
+                  <Sparkles size={13} /> Earned automatically, never bought
+                </span>
+              }
+            />
+            <BadgeShelf badges={me.badges} />
           </section>
         </>
       )}

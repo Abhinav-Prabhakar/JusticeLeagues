@@ -144,16 +144,25 @@ describe("impact and public ledger", () => {
     expect(impact.byCategory.reduce((sum, category) => sum + category.points, 0)).toBe(league.points);
     expect(impact.byMonth).toHaveLength(12);
     expect(impact.projects.length).toBeGreaterThan(0);
+    expect(impact.totals.projects).toBeGreaterThanOrEqual(impact.projects.length);
   });
 
   it("shows live awards with their author, and hides imported history by default", () => {
+    const fallback = listPublicLedger(db, { limit: 10 });
+    expect(fallback.source).toBe("imported");
+    expect(fallback.entries.every((entry) => entry.refType === "sealed_history")).toBe(true);
+
     makeProfile("usr_public");
     joinLeague(db, "usr_public", "harbor");
 
     const page = listPublicLedger(db, { limit: 10 });
     expect(page.entries.length).toBeGreaterThan(0);
+    expect(page.source).toBe("live");
     expect(page.entries.every((entry) => entry.refType !== "sealed_history")).toBe(true);
     expect(page.entries.some((entry) => entry.profile?.id === "usr_public")).toBe(true);
+
+    const liveOnly = listPublicLedger(db, { liveOnly: true, limit: 100 });
+    expect(liveOnly.total).toBe(page.total);
 
     const sealed = listPublicLedger(db, { includeSealed: true, limit: 100 });
     expect(sealed.total).toBeGreaterThan(page.total);

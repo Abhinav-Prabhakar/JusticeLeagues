@@ -10,7 +10,7 @@ import {
 import { hashPassword } from "../auth/password";
 import { transaction, type Db } from "./index";
 import { shiftStart } from "./schedule";
-import { seedBadges } from "./badges";
+import { evaluateBadges, seedBadges } from "./badges";
 import { materializeSealedLedger } from "./sealed";
 import { rebuildStandings } from "./standings";
 
@@ -199,6 +199,9 @@ export function seedIfEmpty(db: Db): boolean {
     // is built inside the same transaction as the seed.
     materializeSealedLedger(db);
     rebuildStandings(db);
+    for (const row of db.prepare("SELECT id FROM profiles").all() as unknown as { id: string }[]) {
+      evaluateBadges(db, row.id);
+    }
   });
 
   return true;
@@ -213,6 +216,11 @@ export function ensurePhase3(db: Db): { inserted: number } {
     seedBadges(db);
     const inserted = materializeSealedLedger(db);
     rebuildStandings(db);
+    // Printed-edition members hold roster seats but no ledger rows, so run the
+    // badge rules once for every profile on startup.
+    for (const row of db.prepare("SELECT id FROM profiles").all() as unknown as { id: string }[]) {
+      evaluateBadges(db, row.id);
+    }
     return { inserted };
   });
 }

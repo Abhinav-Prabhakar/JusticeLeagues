@@ -24,14 +24,25 @@ export interface PublicLedgerOptions {
   limit?: number;
   offset?: number;
   includeSealed?: boolean;
+  /** Skip the imported-history fallback and return live entries only. */
+  liveOnly?: boolean;
 }
 
 /**
  * The public record. Imported chapter history is excluded by default — it has
- * no local author and would drown the page in structural rows. Every live
- * award, correction and reversal is shown with the person and reason.
+ * no local author and would drown the page in structural rows. When a fresh
+ * database has no live awards at all, the page falls back to the imported
+ * history so it is never blank; `source` tells the UI which it is showing.
  */
 export function listPublicLedger(db: Db, options: PublicLedgerOptions = {}): PublicLedgerDTO {
+  const page = readLedger(db, { ...options, includeSealed: Boolean(options.includeSealed) });
+  if (page.total > 0 || options.includeSealed || options.liveOnly) return page;
+
+  const fallback = readLedger(db, { ...options, includeSealed: true });
+  return { ...fallback, source: fallback.total > 0 ? "imported" : "live" };
+}
+
+function readLedger(db: Db, options: PublicLedgerOptions): PublicLedgerDTO {
   const limit = Math.min(100, Math.max(1, options.limit ?? 25));
   const offset = Math.max(0, options.offset ?? 0);
   const where: string[] = ["1 = 1"];
@@ -104,5 +115,6 @@ export function listPublicLedger(db: Db, options: PublicLedgerOptions = {}): Pub
     limit,
     offset,
     totals: { awarded: Number(totals.awarded) || 0, reversed: Number(totals.reversed) || 0 },
+    source: options.includeSealed ? "imported" : "live",
   };
 }

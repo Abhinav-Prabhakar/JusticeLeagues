@@ -31,6 +31,7 @@ import { cn } from "../../utils/cn";
 import { useLeagueContext } from "./context";
 import { DAYS, initials } from "./constants";
 import { ProjectReview } from "./ProjectReview";
+import { AnomalyQueue } from "./AnomalyQueue";
 
 const STATUS_STYLE = {
   attended: "bg-forest text-paper",
@@ -625,6 +626,7 @@ export default function LeagueSteward() {
       </div>
 
       <ProjectReview />
+      <AnomalyQueue leagueId={l.id} />
     </div>
   );
 }

@@ -224,7 +224,13 @@ export function evaluateBadges(db: Db, profileId: string): void {
     points: number | null;
   };
 
-  const joins = Number(counts.joins) || 0;
+  // A printed-edition member has a roster seat but no join award, so the
+  // membership table is the truthful source for "signed the charter".
+  const memberships = db
+    .prepare("SELECT COUNT(*) AS count FROM league_members WHERE profile_id = ? AND status = 'active'")
+    .get(profileId) as { count: number };
+
+  const joins = Math.max(Number(counts.joins) || 0, Number(memberships.count) || 0);
   const attendances = Number(counts.attendances) || 0;
   const projects = Number(counts.projects) || 0;
   const points = Number(counts.points) || 0;

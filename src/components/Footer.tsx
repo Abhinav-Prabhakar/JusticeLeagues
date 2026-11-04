@@ -35,6 +35,7 @@ export function Footer() {
             {[
               { to: "/", label: "Front page" },
               { to: "/leagues", label: "The Atlas" },
+              { to: "/ledger", label: "The public record" },
               { to: "/dashboard", label: "Your desk" },
               { to: "/#charter", label: "The Charter" },
             ].map((item) => (

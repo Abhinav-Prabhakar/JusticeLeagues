@@ -173,6 +173,15 @@ export function Nav() {
             <Compass size={16} />
           </Link>
 
+          <Link
+            to="/ledger"
+            title="The public record"
+            aria-label="Read the public points ledger"
+            className="border-ink bg-paper hover:bg-paper-2 hidden h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-colors sm:grid"
+          >
+            <Scale size={16} />
+          </Link>
+
           <div
             className={cn(
               "border-ink bg-paper flex items-center overflow-hidden rounded-full border-2 transition-all duration-500",

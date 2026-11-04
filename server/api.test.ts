@@ -538,3 +538,115 @@ describe("steward editing API", () => {
     expect(after.leagues.some((league) => league.id === "harbor")).toBe(false);
   });
 });
+
+describe("phase 3 API", () => {
+  async function loginSteward(email: string) {
+    const response = await post("/api/auth/login", { email, password: "millbrook" });
+    expect(response.status).toBe(200);
+    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+  }
+
+  it("serves ranked standings for every scope", async () => {
+    const global = (await (await app.request("/api/standings?scope=global&limit=3")).json()) as {
+      total: number;
+      rows: { rank: number; points: number; leagueId: string }[];
+    };
+    expect(global.total).toBe(10);
+    expect(global.rows).toHaveLength(3);
+    expect(global.rows[0].rank).toBe(1);
+    expect(global.rows[0].leagueId).toBe("harbor");
+
+    const month = (await (await app.request("/api/standings?scope=month")).json()) as {
+      rows: { points: number; monthPoints: number }[];
+    };
+    expect(month.rows.every((row) => row.points === row.monthPoints)).toBe(true);
+
+    const chapters = (await (await app.request("/api/standings?scope=chapter&league=harbor")).json()) as {
+      rows: { chapterId: string | null; points: number }[];
+    };
+    expect(chapters.rows).toHaveLength(3);
+    expect(chapters.rows.reduce((sum, row) => sum + row.points, 0)).toBe(
+      global.rows.find((row) => row.leagueId === "harbor")?.points ?? Math.max(...chapters.rows.map((r) => r.points)),
+    );
+
+    const invalid = await app.request("/api/standings?scope=nonsense");
+    expect(invalid.status).toBe(400);
+  });
+
+  it("serves impact for the city and for one league", async () => {
+    const city = (await (await app.request("/api/impact")).json()) as {
+      totals: { points: number };
+      byMonth: { month: string }[];
+    };
+    expect(city.totals.points).toBeGreaterThan(0);
+    expect(city.byMonth).toHaveLength(12);
+
+    const league = (await (await app.request("/api/leagues/harbor/impact")).json()) as {
+      leagueId: string;
+      totals: { points: number };
+      byChapter: { points: number }[];
+    };
+    expect(league.leagueId).toBe("harbor");
+    expect(league.byChapter.reduce((sum, chapter) => sum + chapter.points, 0)).toBe(league.totals.points);
+
+    const missing = await app.request("/api/leagues/nope/impact");
+    expect(missing.status).toBe(404);
+  });
+
+  it("falls back to imported history until a live award exists", async () => {
+    const fallback = (await (await app.request("/api/ledger")).json()) as {
+      source: string;
+      total: number;
+      entries: { refType: string }[];
+    };
+    expect(fallback.source).toBe("imported");
+    expect(fallback.total).toBeGreaterThan(0);
+    expect(fallback.entries.every((entry) => entry.refType === "sealed_history")).toBe(true);
+
+    const live = (await (await app.request("/api/ledger?live=1")).json()) as { total: number; source: string };
+    expect(live.total).toBe(0);
+    expect(live.source).toBe("live");
+
+    const volunteer = await register("ledger@example.com", "Ledger Reader");
+    await app.request("/api/leagues/harbor/join", { method: "POST", headers: { cookie: volunteer.cookie } });
+
+    const after = (await (await app.request("/api/ledger")).json()) as {
+      source: string;
+      entries: { refType: string; profile: { id: string } | null }[];
+    };
+    expect(after.source).toBe("live");
+    expect(after.entries.every((entry) => entry.refType !== "sealed_history")).toBe(true);
+  });
+
+  it("keeps the anomaly queue behind a steward seat", async () => {
+    const volunteer = await register("queue@example.com", "Queue Reader");
+    const denied = await app.request("/api/leagues/harbor/anomalies", { headers: { cookie: volunteer.cookie } });
+    expect(denied.status).toBe(403);
+
+    const anonymous = await app.request("/api/leagues/harbor/anomalies");
+    expect(anonymous.status).toBe(401);
+
+    const stewardCookie = await loginSteward("steward.harbor.1@justiceleagues.local");
+    const queue = await app.request("/api/leagues/harbor/anomalies", { headers: { cookie: stewardCookie } });
+    expect(queue.status).toBe(200);
+    expect(((await queue.json()) as { anomalies: unknown[] }).anomalies).toEqual([]);
+  });
+
+  it("reverses a ledger entry through the steward route and refuses a second time", async () => {
+    const stewardCookie = await loginSteward("steward.harbor.1@justiceleagues.local");
+    const volunteer = await register("reverse@example.com", "Reverse Me");
+    await app.request("/api/leagues/harbor/join", { method: "POST", headers: { cookie: volunteer.cookie } });
+
+    const me = (await (
+      await app.request("/api/auth/me", { headers: { cookie: volunteer.cookie } })
+    ).json()) as { me: { ledger: { id: string; delta: number }[] } };
+    const entry = me.me.ledger[0];
+
+    const reversed = await post(`/api/leagues/harbor/ledger/${entry.id}/reverse`, { note: "Test" }, stewardCookie);
+    expect(reversed.status).toBe(200);
+    expect(((await reversed.json()) as { delta: number }).delta).toBe(-entry.delta);
+
+    const twice = await post(`/api/leagues/harbor/ledger/${entry.id}/reverse`, {}, stewardCookie);
+    expect(twice.status).toBe(409);
+  });
+});

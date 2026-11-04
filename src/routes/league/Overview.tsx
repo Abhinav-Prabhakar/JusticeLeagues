@@ -14,7 +14,11 @@ export default function LeagueOverview() {
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
   const membership = activeMembership(edition.me, l.id);
   const myChapter = l.chapters.find((chapter) => chapter.id === membership?.chapterId);
-  const rank = [...edition.leagues].sort((a, b) => b.points - a.points).findIndex((x) => x.id === l.id) + 1;
+  const rank =
+    l.rank ?? [...edition.leagues].sort((a, b) => b.points - a.points).findIndex((x) => x.id === l.id) + 1;
+  const monthRank =
+    l.monthRank ??
+    [...edition.leagues].sort((a, b) => b.month - a.month).findIndex((x) => x.id === l.id) + 1;
   const { tier, next, pct } = tierFor(l.points);
 
   const shifts = edition.shifts
@@ -133,6 +137,22 @@ export default function LeagueOverview() {
               ? `${myChapter ? `${myChapter.name} · ` : ""}league total ${fmt(l.points)}`
               : `Held by ${l.name} across every chapter`}
           </p>
+          <div className="border-ink/20 mt-3 grid grid-cols-2 gap-2 border-t pt-3">
+            <div>
+              <div className="font-display text-2xl leading-none font-black">
+                #{rank}
+                <span className="text-ink-3 ml-1 font-mono text-[10px] font-normal">all-time</span>
+              </div>
+              <div className="kicker text-ink-3 mt-1 text-[8px]">of {edition.leagues.length} citywide</div>
+            </div>
+            <div>
+              <div className="font-display text-2xl leading-none font-black">
+                #{monthRank}
+                <span className="text-ink-3 ml-1 font-mono text-[10px] font-normal">month</span>
+              </div>
+              <div className="kicker text-ink-3 mt-1 text-[8px]">{fmt(l.month)} JP this month</div>
+            </div>
+          </div>
           <div className="kicker text-ink-3 mt-3 text-[9px]">League tier</div>
           <div className="text-ink-2 mt-1 flex items-center justify-between font-mono text-[10px]">
             <span className="flex items-center gap-1">

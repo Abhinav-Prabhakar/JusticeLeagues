@@ -60,10 +60,16 @@ export function getImpact(db: Db, leagueId: string | null = null): ImpactDTO {
     .prepare(
       `SELECT
          (SELECT COALESCE(SUM(l.base_hours), 0) FROM leagues l ${leagueFilter}) AS base_hours,
+         (SELECT COALESCE(SUM(l.base_projects), 0) FROM leagues l ${leagueFilter}) AS base_projects,
          (SELECT COUNT(*) FROM chapters c JOIN leagues l ON l.id = c.league_id ${leagueId ? "WHERE l.id = ?" : ""}) AS chapters,
          (SELECT COUNT(*) FROM shifts s JOIN leagues l ON l.id = s.league_id ${leagueId ? "WHERE l.id = ?" : ""}) AS shifts`,
     )
-    .get(...params, ...params, ...params) as { base_hours: number; chapters: number; shifts: number };
+    .get(...params, ...params, ...params, ...params) as {
+    base_hours: number;
+    base_projects: number;
+    chapters: number;
+    shifts: number;
+  };
 
   const attendance = db
     .prepare(
@@ -190,7 +196,7 @@ export function getImpact(db: Db, leagueId: string | null = null): ImpactDTO {
       monthPoints: Number(totalsRow.month) || 0,
       hours: Number(base.base_hours) + (Number(attendance.hours) || 0),
       people,
-      projects: wins.length,
+      projects: Number(base.base_projects) + wins.length,
       volunteers: Number(totalsRow.volunteers) || 0,
       shifts: Number(base.shifts) || 0,
       chapters: Number(base.chapters) || 0,

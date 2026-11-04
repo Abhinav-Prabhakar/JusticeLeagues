@@ -333,6 +333,11 @@ export interface PublicLedgerDTO {
   limit: number;
   offset: number;
   totals: { awarded: number; reversed: number };
+  /**
+   * `live` when the page is showing locally authored awards; `imported` when
+   * there is no live history yet and the sealed printed edition stands in.
+   */
+  source: "live" | "imported";
 }
 
 export type AnomalySeverity = "watch" | "review" | "severe";

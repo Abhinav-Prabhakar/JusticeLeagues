@@ -1,19 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AnomalyDTO,
   CreatedInviteDTO,
   EditionDTO,
+  ImpactDTO,
   InvitePreviewDTO,
   InviteRole,
   LeagueDTO,
   LeagueMemberDTO,
   MeDTO,
   ProjectDTO,
+  PublicLedgerDTO,
   ResourceDTO,
   ResourceKind,
   ShiftDTO,
   ShiftRosterDTO,
+  StandingsDTO,
+  StandingsScope,
 } from "./types";
-import { api, initialEdition, STATIC_PREVIEW, staticLeagueDetail } from "./api";
+import type { Cause } from "../data/fixtures";
+import {
+  api,
+  initialEdition,
+  STATIC_PREVIEW,
+  staticImpact,
+  staticLeagueDetail,
+  staticPublicLedger,
+  staticStandings,
+} from "./api";
 import { useApp } from "../ctx";
 
 const KEY = ["edition"] as const;
@@ -595,6 +609,132 @@ export function useUpdateLeagueSettings() {
     onSuccess: (result) => {
       invalidateEdition(client);
       toast(result.archived ? "League archived" : "League settings saved");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export interface StandingsInput {
+  scope: StandingsScope;
+  cause?: Cause | "all";
+  leagueId?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export function useStandings({ scope, cause = "all", leagueId, limit = 50, offset = 0 }: StandingsInput) {
+  const query = new URLSearchParams({ scope, cause, limit: String(limit), offset: String(offset) });
+  if (leagueId) query.set("league", leagueId);
+
+  return useQuery({
+    queryKey: ["standings", scope, cause, leagueId ?? null, limit, offset],
+    queryFn: () => api<StandingsDTO>(`/api/standings?${query.toString()}`),
+    initialData: STATIC_PREVIEW ? () => staticStandings({ scope, cause, limit }) : undefined,
+    enabled: !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useImpact(leagueId: string | null = null) {
+  return useQuery({
+    queryKey: ["impact", leagueId ?? "city"],
+    queryFn: () => api<ImpactDTO>(leagueId ? `/api/leagues/${leagueId}/impact` : "/api/impact"),
+    initialData: STATIC_PREVIEW ? () => staticImpact(leagueId) : undefined,
+    enabled: !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export interface PublicLedgerInput {
+  leagueId?: string | null;
+  refType?: string | null;
+  limit?: number;
+  offset?: number;
+  liveOnly?: boolean;
+}
+
+export function usePublicLedger({ leagueId, refType, limit = 25, offset = 0, liveOnly = false }: PublicLedgerInput = {}) {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (leagueId) query.set("league", leagueId);
+  if (refType) query.set("type", refType);
+  if (liveOnly) query.set("live", "1");
+
+  return useQuery({
+    queryKey: ["ledger", leagueId ?? "all", refType ?? "all", limit, offset, liveOnly],
+    queryFn: () => api<PublicLedgerDTO>(`/api/ledger?${query.toString()}`),
+    initialData: STATIC_PREVIEW
+      ? () =>
+          liveOnly
+            ? {
+                entries: [],
+                total: 0,
+                limit,
+                offset,
+                totals: { awarded: 0, reversed: 0 },
+                source: "live" as const,
+              }
+            : staticPublicLedger({ leagueId, limit, offset })
+      : undefined,
+    enabled: !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useAnomalies(leagueId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ["anomalies", leagueId],
+    queryFn: () => api<{ anomalies: AnomalyDTO[] }>(`/api/leagues/${leagueId}/anomalies`),
+    enabled: Boolean(leagueId) && enabled && !STATIC_PREVIEW,
+    staleTime: 5_000,
+    retry: 1,
+  });
+}
+
+export function useResolveAnomaly(leagueId: string) {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({
+      anomalyId,
+      decision,
+      note,
+    }: {
+      anomalyId: string;
+      decision: "clear" | "reverse";
+      note?: string;
+    }) =>
+      api<{ resolved: boolean; reversed: boolean }>(`/api/anomalies/${anomalyId}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ decision, note }),
+      }),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: ["anomalies", leagueId] });
+      invalidateEdition(client);
+      toast(result.reversed ? "Entry reversed — a correction was posted" : "Review item cleared");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useReverseLedgerEntry(leagueId: string) {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ entryId, note }: { entryId: string; note?: string }) =>
+      api<{ reversed: boolean; delta: number }>(`/api/leagues/${leagueId}/ledger/${entryId}/reverse`, {
+        method: "POST",
+        body: JSON.stringify({ note }),
+      }),
+    onSuccess: (result) => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["ledger"] });
+      void client.invalidateQueries({ queryKey: ["anomalies", leagueId] });
+      toast("Correction posted", result.delta);
     },
     onError: (error) => toast(error.message),
   });
