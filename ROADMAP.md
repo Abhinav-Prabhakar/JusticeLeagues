@@ -283,10 +283,11 @@ project → see points and rank update at both chapter and league level.
 - Real impact ledger aggregation from approved projects (not hard-coded rows).
   ✅ `GET /api/impact` and `GET /api/leagues/:id/impact`; chapters, categories
   and the last twelve months come from the ledger.
-- Tiers/badges, streaks, monthly resets, "most improved" editorial module. ✅
-  13 badges evaluated server-side, `first_join` counts roster seats so printed-edition
-  members earn it; streaks come from positive ledger weeks; month delta is
-  pace-adjusted.
+- Tiers/badges, streaks, monthly rollups, "most improved" editorial module. ✅
+  13 badges evaluated server-side, `first_join` counts roster seats so
+  printed-edition members earn it; streaks come from positive ledger weeks;
+  the month is a rolling calendar aggregate with a pace-adjusted delta, so
+  nothing resets and history is never lost.
 - Rate limits, caps, anomaly queue, admin reversal tool. ✅ attendance is capped
   at 80/shift and 5 check-ins/day; soft-cap flags queue for stewards;
   `POST /api/leagues/:id/ledger/:entryId/reverse` appends a correction, never

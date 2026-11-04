@@ -147,8 +147,8 @@ export default function LedgerPage() {
 
         {data?.source === "imported" && (
           <p className="border-ink bg-paper-2 mb-4 border-2 border-dashed px-4 py-2.5 font-mono text-[10px]">
-            No live awards yet — showing the imported chapter history sealed into the printed edition. The first local
-            award will push these rows aside.
+            No local awards yet — showing the record sealed into the printed edition. The first local award will push
+            these rows aside.
           </p>
         )}
 
