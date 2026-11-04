@@ -6,7 +6,7 @@
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-32_unit_%C2%B7_8_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-39_unit_%C2%B7_9_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
@@ -30,8 +30,8 @@
 
 - **Citywide leagues, neighbourhood chapters.** Climate, safety, food, transit, learning, housing, health, rights.
 - **Real shifts, real capacity.** Join a league, claim a shift, survive a refresh. Two accounts see the same filled spots.
-- **A steward desk, not a form.** Stewards post shifts, cancel them, and record attendance. Hours become points.
-- **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12.
+- **A steward desk, not a form.** Stewards post shifts, cancel them, record attendance, and approve the projects that earn points.
+- **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12; an approved project awards 50–500.
 
 > Points land when a steward checks you in — not when you tap sign up. That distinction is the whole leaderboard.
 
@@ -40,7 +40,7 @@
 <table>
   <tr>
     <td width="50%"><a href="docs/screenshots/league.webp"><img src="docs/screenshots/league.webp" alt="League page with tabs, standing, chapters, and open shifts" /></a><br/><sub><b>League page</b> · tabs, standing, and the next shift</sub></td>
-    <td width="50%"><a href="docs/screenshots/steward.webp"><img src="docs/screenshots/steward.webp" alt="Steward desk with a checked-in volunteer and an awarded ledger entry" /></a><br/><sub><b>Steward desk</b> · post a shift, record hours, mint nothing by hand</sub></td>
+    <td width="50%"><a href="docs/screenshots/steward.webp"><img src="docs/screenshots/steward.webp" alt="Steward desk with a checked-in volunteer, a pending project review, and an awarded ledger entry" /></a><br/><sub><b>Steward desk</b> · post a shift, record hours, approve the project</sub></td>
   </tr>
   <tr>
     <td width="50%"><a href="docs/screenshots/chapters.webp"><img src="docs/screenshots/chapters.webp" alt="Neighbourhood chapter cards with points, members, and shifts" /></a><br/><sub><b>Chapters</b> · every point rolls up to the citywide league</sub></td>
@@ -48,6 +48,9 @@
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/leagues.webp"><img src="docs/screenshots/leagues.webp" alt="Every league in the atlas" /></a><br/><sub><b>The Atlas</b> · every league, one editorial index</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="docs/screenshots/projects.webp"><img src="docs/screenshots/projects.webp" alt="Steward reviewing a filed project with its metrics and evidence" /></a><br/><sub><b>The review desk</b> · members file the work, stewards approve the points</sub></td>
   </tr>
 </table>
 
@@ -129,8 +132,8 @@ Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 32 unit + API integration tests
-npm run test:e2e   # 8 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 39 unit + API integration tests
+npm run test:e2e   # 9 Playwright tests, isolated :8788 / :5174 / data/e2e.db
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

@@ -29,7 +29,10 @@ import {
   leaveLeague,
   listLeagues,
   listMembers,
+  listProjects,
+  reviewProject,
   signupShift,
+  submitProject,
 } from "./db/repository";
 import { newId } from "./db";
 
@@ -64,6 +67,26 @@ const shiftSchema = z.object({
   capacity: z.number().int().min(1).max(100),
   place: z.string().trim().min(2).max(80),
   bring: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
+});
+
+const projectSchema = z.object({
+  chapterId: z.string().trim().min(1).max(80),
+  title: z.string().trim().min(4).max(90),
+  summary: z.string().trim().min(20).max(500),
+  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD."),
+  people: z.number().int().min(1).max(5000),
+  hours: z.number().min(0).max(10000),
+  amount: z.string().trim().max(60).optional(),
+  evidenceUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .refine((value) => value === "" || /^https?:\/\//i.test(value), "Use an http(s) link.")
+    .optional(),
+});
+
+const reviewSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
 });
 
 function slugifyHandle(value: string): string {
@@ -189,6 +212,29 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
   app.delete("/api/shifts/:id", auth(), (c) => {
     const profile = c.get("profile")!;
     return c.json(cancelShiftAsSteward(db, profile.id, c.req.param("id")));
+  });
+
+  app.get("/api/leagues/:id/projects", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json({ projects: listProjects(db, profile.id, c.req.param("id")) });
+  });
+
+  app.post("/api/leagues/:id/projects", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = projectSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the project details and try again.", code: "invalid_input" }, 400);
+    }
+    return c.json(submitProject(db, profile.id, c.req.param("id"), parsed.data), 201);
+  });
+
+  app.post("/api/projects/:id/review", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = reviewSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Choose approve or reject.", code: "invalid_input" }, 400);
+    }
+    return c.json(reviewProject(db, profile.id, c.req.param("id"), parsed.data.decision));
   });
 
   app.post("/api/auth/register", async (c) => {

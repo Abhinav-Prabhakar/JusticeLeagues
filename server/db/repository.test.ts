@@ -16,9 +16,14 @@ import {
   leaveLeague,
   listLeagues,
   listMembers,
+  listProjects,
   listShifts,
+  listWins,
+  reviewProject,
   signupShift,
+  submitProject,
 } from "./repository";
+import { projectPoints } from "../../src/data/projects";
 
 let db: Db;
 
@@ -266,5 +271,105 @@ describe("shift authoring", () => {
         place: "Dock 4",
       }),
     ).toThrowError(/chapter/);
+  });
+});
+
+describe("project approval", () => {
+  const OWNER = "usr_seed_harbor_1";
+  const MEMBER = "usr_projector";
+
+  function fileProject() {
+    makeProfile(MEMBER);
+    joinLeague(db, MEMBER, "harbor");
+    return submitProject(db, MEMBER, "harbor", {
+      chapterId: "ch_harbor_2",
+      title: "Riverfront replanting",
+      summary: "Twelve neighbours replanted the east bank with native shrubs over two weekends.",
+      occurredOn: "2026-05-04",
+      people: 12,
+      hours: 30,
+      amount: "120 saplings",
+      evidenceUrl: "https://example.com/evidence",
+    });
+  }
+
+  it("files a project as pending, then approval awards its points once", () => {
+    const project = fileProject();
+    expect(project.status).toBe("submitted");
+    expect(project.points).toBe(0);
+
+    const points = projectPoints(project.facts);
+    expect(points).toBe(50 + 30 * 4 + 12 * 2);
+
+    const queued = listProjects(db, OWNER, "harbor");
+    expect(queued[0]).toMatchObject({ id: project.id, status: "submitted", points: 0 });
+
+    const beforeProjects = listLeagues(db).find((league) => league.id === "harbor")!.projects;
+    const approved = reviewProject(db, OWNER, project.id, "approve");
+    expect(approved).toMatchObject({ status: "approved", points });
+    expect(listLeagues(db).find((league) => league.id === "harbor")!.projects).toBe(beforeProjects + 1);
+
+    const me = getMe(db, MEMBER);
+    expect(me.points).toBe(JOIN_POINTS + points);
+    expect(me.ledger.filter((entry) => entry.delta === points)).toHaveLength(1);
+    expect(listWins(db).some((win) => win.id === project.id)).toBe(true);
+
+    expect(() => reviewProject(db, OWNER, project.id, "approve")).toThrowError(/already been reviewed/);
+    expect(getMe(db, MEMBER).points).toBe(JOIN_POINTS + points);
+  });
+
+  it("credits project points to the filing chapter", () => {
+    const project = fileProject();
+    const points = projectPoints(project.facts);
+
+    const before = listLeagues(db)
+      .find((league) => league.id === "harbor")!
+      .chapters.find((chapter) => chapter.id === "ch_harbor_2")!.points;
+
+    reviewProject(db, OWNER, project.id, "approve");
+
+    const after = listLeagues(db)
+      .find((league) => league.id === "harbor")!
+      .chapters.find((chapter) => chapter.id === "ch_harbor_2")!.points;
+    expect(after).toBe(before + points);
+  });
+
+  it("rejects without minting points and keeps it off the public record", () => {
+    const project = fileProject();
+    const rejected = reviewProject(db, OWNER, project.id, "reject");
+
+    expect(rejected).toMatchObject({ status: "rejected", points: 0 });
+    expect(getMe(db, MEMBER).points).toBe(JOIN_POINTS);
+    expect(listWins(db).some((win) => win.id === project.id)).toBe(false);
+    expect(listProjects(db, OWNER, "harbor")[0].status).toBe("rejected");
+  });
+
+  it("refuses non-members, plain members, and stewards from another league", () => {
+    const project = fileProject();
+    makeProfile("usr_plain_project");
+    joinLeague(db, "usr_plain_project", "harbor");
+
+    expect(() => listProjects(db, "usr_plain_project", "harbor")).toThrowError(/steward/);
+    expect(() => reviewProject(db, "usr_plain_project", project.id, "approve")).toThrowError(/steward/);
+    expect(() => reviewProject(db, "usr_seed_spoke_1", project.id, "approve")).toThrowError(/steward/);
+
+    makeProfile("usr_outsider");
+    expect(() =>
+      submitProject(db, "usr_outsider", "harbor", {
+        chapterId: "ch_harbor_2",
+        title: "Unfiled project",
+        summary: "Someone who never joined the league should not be able to file this.",
+        occurredOn: "2026-05-05",
+        people: 2,
+        hours: 3,
+      }),
+    ).toThrowError(/Join the league/);
+  });
+});
+
+describe("project points", () => {
+  it("stays within the published floor and cap", () => {
+    expect(projectPoints({ people: 0, hours: 0, amount: "" })).toBe(50);
+    expect(projectPoints({ people: 5000, hours: 10000, amount: "" })).toBe(500);
   });
 });

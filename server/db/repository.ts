@@ -8,6 +8,8 @@ import type {
   LedgerEntryDTO,
   MeDTO,
   MembershipDTO,
+  ProjectDTO,
+  ProjectStatus,
   ShiftDTO,
   ShiftRosterDTO,
   ShiftRosterEntryDTO,
@@ -15,6 +17,7 @@ import type {
   WinDTO,
 } from "../../src/lib/types";
 import type { Cause } from "../../src/data/fixtures";
+import { projectPoints, type ProjectFacts } from "../../src/data/projects";
 
 export const JOIN_POINTS = 25;
 export const ATTENDANCE_POINTS_PER_HOUR = 12;
@@ -52,6 +55,7 @@ interface LeagueRow {
   hood: string;
   ledger_points: number;
   member_count: number;
+  local_projects: number;
 }
 
 interface ChapterRow {
@@ -82,11 +86,19 @@ interface ShiftRow {
 interface WinRow {
   id: string;
   league_id: string;
+  chapter_id: string | null;
   title: string;
   points: number;
   photo_id: number;
   facts: string;
   occurred_at: string;
+  summary: string;
+  evidence_url: string | null;
+  submitted_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  status: ProjectStatus;
+  created_at: string;
 }
 
 interface ProfileRow {
@@ -124,7 +136,10 @@ export function listLeagues(db: Db): LeagueDTO[] {
       `SELECT l.*, n.name AS hood,
         COALESCE((SELECT SUM(p.delta) FROM points_ledger p WHERE p.league_id = l.id), 0) AS ledger_points,
         COALESCE((SELECT COUNT(*) FROM league_members m
-                   WHERE m.league_id = l.id AND m.status = 'active'), 0) AS member_count
+                   WHERE m.league_id = l.id AND m.status = 'active'), 0) AS member_count,
+        COALESCE((SELECT COUNT(*) FROM wins w
+                   WHERE w.league_id = l.id AND w.status = 'approved'
+                     AND w.submitted_by IS NOT NULL), 0) AS local_projects
        FROM leagues l
        JOIN chapters c ON c.id = 'ch_' || l.id
        JOIN neighborhoods n ON n.id = c.neighborhood_id
@@ -168,7 +183,7 @@ export function listLeagues(db: Db): LeagueDTO[] {
     delta: row.delta,
     trend: JSON.parse(row.trend) as number[],
     members: row.base_members + row.member_count,
-    projects: row.base_projects,
+    projects: row.base_projects + row.local_projects,
     streak: row.base_streak,
     hours: row.base_hours,
     photo: row.photo_id,
@@ -213,7 +228,9 @@ export function listShifts(db: Db): ShiftDTO[] {
 }
 
 export function listWins(db: Db): WinDTO[] {
-  const rows = db.prepare("SELECT * FROM wins ORDER BY occurred_at DESC").all() as unknown as WinRow[];
+  const rows = db
+    .prepare("SELECT * FROM wins WHERE status = 'approved' ORDER BY occurred_at DESC")
+    .all() as unknown as WinRow[];
   return rows.map((row) => ({
     id: row.id,
     league: row.league_id,
@@ -222,6 +239,9 @@ export function listWins(db: Db): WinDTO[] {
     photo: row.photo_id,
     when: relativeTime(row.occurred_at),
     facts: JSON.parse(row.facts) as WinDTO["facts"],
+    chapterId: row.chapter_id,
+    summary: row.summary,
+    evidenceUrl: row.evidence_url,
   }));
 }
 
@@ -539,6 +559,13 @@ function hoursFromDuration(duration: string): number {
   return match ? Number(match[1]) : 2;
 }
 
+function assertMember(db: Db, profileId: string, leagueId: string) {
+  const row = db
+    .prepare("SELECT 1 FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
+    .get(leagueId, profileId);
+  if (!row) throw new AppError(403, "not_member", "Join the league before filing a project.");
+}
+
 function assertSteward(db: Db, profileId: string, leagueId: string) {
   const row = db
     .prepare("SELECT role FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
@@ -750,5 +777,152 @@ export function cancelShiftAsSteward(db: Db, actorId: string, shiftId: string): 
     ).run(now, shiftId);
 
     return { cancelled: true as const };
+  });
+}
+
+interface ProjectRow extends WinRow {
+  submitter_handle: string | null;
+  submitter_name: string | null;
+}
+
+function projectFromRow(row: ProjectRow): ProjectDTO {
+  return {
+    id: row.id,
+    league: row.league_id,
+    chapterId: row.chapter_id,
+    title: row.title,
+    summary: row.summary,
+    occurredOn: row.occurred_at.slice(0, 10),
+    facts: JSON.parse(row.facts) as ProjectDTO["facts"],
+    evidenceUrl: row.evidence_url,
+    photo: row.photo_id,
+    status: row.status,
+    points: row.points,
+    submittedBy:
+      row.submitted_by && row.submitter_name
+        ? {
+            id: row.submitted_by,
+            handle: row.submitter_handle ?? row.submitted_by,
+            displayName: row.submitter_name,
+          }
+        : null,
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+  };
+}
+
+function readProjectRow(db: Db, projectId: string): ProjectRow | undefined {
+  return db
+    .prepare(
+      `SELECT w.*, p.handle AS submitter_handle, p.display_name AS submitter_name
+         FROM wins w LEFT JOIN profiles p ON p.id = w.submitted_by
+        WHERE w.id = ?`,
+    )
+    .get(projectId) as ProjectRow | undefined;
+}
+
+export function listProjects(db: Db, actorId: string, leagueId: string): ProjectDTO[] {
+  assertSteward(db, actorId, leagueId);
+  const rows = db
+    .prepare(
+      `SELECT w.*, p.handle AS submitter_handle, p.display_name AS submitter_name
+         FROM wins w LEFT JOIN profiles p ON p.id = w.submitted_by
+        WHERE w.league_id = ?
+        ORDER BY CASE w.status WHEN 'submitted' THEN 0 ELSE 1 END, w.occurred_at DESC`,
+    )
+    .all(leagueId) as unknown as ProjectRow[];
+  return rows.map(projectFromRow);
+}
+
+export interface SubmitProjectInput {
+  chapterId: string;
+  title: string;
+  summary: string;
+  occurredOn: string;
+  people: number;
+  hours: number;
+  amount?: string;
+  evidenceUrl?: string;
+}
+
+export function submitProject(db: Db, actorId: string, leagueId: string, input: SubmitProjectInput): ProjectDTO {
+  return transaction(db, () => {
+    assertMember(db, actorId, leagueId);
+
+    const league = db.prepare("SELECT id, photo_id FROM leagues WHERE id = ?").get(leagueId) as
+      { id: string; photo_id: number } | undefined;
+    if (!league) throw new AppError(404, "league_not_found", "That league is not in this edition.");
+
+    const chapter = db
+      .prepare("SELECT id FROM chapters WHERE id = ? AND league_id = ?")
+      .get(input.chapterId, leagueId) as { id: string } | undefined;
+    if (!chapter) throw new AppError(400, "invalid_chapter", "That chapter is not part of this league.");
+
+    const facts: ProjectFacts = {
+      people: input.people,
+      hours: input.hours,
+      amount: input.amount?.trim() || "Filed by the league",
+    };
+
+    const id = newId("prj");
+    db.prepare(
+      `INSERT INTO wins (
+         id, league_id, chapter_id, title, summary, points, photo_id, facts,
+         evidence_url, occurred_at, submitted_by, status
+       ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 'submitted')`,
+    ).run(
+      id,
+      leagueId,
+      chapter.id,
+      input.title,
+      input.summary,
+      league.photo_id,
+      JSON.stringify(facts),
+      input.evidenceUrl?.trim() || null,
+      `${input.occurredOn}T12:00:00.000Z`,
+      actorId,
+    );
+
+    const project = readProjectRow(db, id);
+    if (!project) throw new Error("The filed project could not be read back.");
+    return projectFromRow(project);
+  });
+}
+
+export function reviewProject(db: Db, actorId: string, projectId: string, decision: "approve" | "reject"): ProjectDTO {
+  return transaction(db, () => {
+    const project = readProjectRow(db, projectId);
+    if (!project) throw new AppError(404, "project_not_found", "That project is no longer on file.");
+    assertSteward(db, actorId, project.league_id);
+    if (project.status !== "submitted") {
+      throw new AppError(409, "already_reviewed", "That project has already been reviewed.");
+    }
+
+    const facts = JSON.parse(project.facts) as ProjectFacts;
+    const points = decision === "approve" ? projectPoints(facts) : 0;
+    const now = new Date().toISOString();
+
+    if (decision === "approve" && project.submitted_by) {
+      award(db, {
+        profileId: project.submitted_by,
+        leagueId: project.league_id,
+        chapterId: project.chapter_id,
+        delta: points,
+        reason: `Project approved: ${project.title}`,
+        refType: "project",
+        refId: project.id,
+        key: `project:${project.id}`,
+      });
+    }
+
+    db.prepare(
+      `UPDATE wins
+          SET status = ?, points = ?, reviewed_by = ?, reviewed_at = ?
+        WHERE id = ?`,
+    ).run(decision === "approve" ? "approved" : "rejected", points, actorId, now, project.id);
+
+    const updated = readProjectRow(db, projectId);
+    if (!updated) throw new Error("The reviewed project could not be read back.");
+    return projectFromRow(updated);
   });
 }

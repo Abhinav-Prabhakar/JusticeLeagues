@@ -84,6 +84,20 @@ await shoot(page, "leagues", true);
 await page.goto(`${base}/dashboard`);
 await shoot(page, "dashboard", true);
 
+// Ada files a completed project; the steward will review it on the desk.
+await page.goto(`${base}/leagues/harbor/impact`);
+await page.getByText("File a completed project").click();
+await page.getByLabel("Project title").fill("Riverfront replanting");
+await page.getByLabel("People").fill("12");
+await page.getByLabel("Volunteer hours").fill("30");
+await page.getByLabel("Measured result").fill("120 native saplings");
+await page.getByLabel("Evidence link").fill("https://example.com/riverfront-replanting");
+await page
+  .getByLabel("What happened")
+  .fill("Twelve neighbours replanted the east bank with native shrubs over two weekends.");
+await page.getByRole("button", { name: /send to the review desk/i }).click();
+await page.getByText("Project filed for steward review").waitFor();
+
 // The seeded steward records Ada's attendance, then the desk is captured.
 const stewardContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
 const steward = await stewardContext.newPage();
@@ -98,6 +112,13 @@ await attendance.getByRole("button", { name: /mark ada lovelace attended/i }).cl
 await attendance.getByText("24 JP").waitFor();
 await steward.waitForTimeout(3200);
 await shoot(steward, "steward", true);
+
+const reviewDesk = steward.locator("section").filter({ hasText: "Filed projects" });
+await reviewDesk.scrollIntoViewIfNeeded();
+await steward.evaluate(() => window.scrollBy(0, -90));
+await steward.waitForTimeout(500);
+await steward.screenshot({ path: `${outDir}/projects.png` });
+console.log("captured projects (review desk)");
 await stewardContext.close();
 
 // Mobile viewports.

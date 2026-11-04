@@ -157,3 +157,57 @@ test("a seeded steward checks a volunteer in and the points stick", async ({ bro
     await stewardContext.close();
   }
 });
+
+test("a filed project becomes a public win only after steward approval", async ({ browser, playwright }) => {
+  const baseURL = test.info().project.use.baseURL!;
+  const memberContext = await browser.newContext({ baseURL });
+  const stewardContext = await browser.newContext({ baseURL });
+
+  try {
+    const email = uniqueEmail("filer");
+    await registerViaApi(memberContext, "Filer One", email);
+    const joined = await memberContext.request.post("/api/leagues/harbor/join");
+    expect(joined.ok(), await joined.text()).toBeTruthy();
+
+    const member = await memberContext.newPage();
+    await member.goto("/leagues/harbor/impact");
+    await member.getByText("File a completed project").click();
+    await member.getByLabel("Project title").fill("Lantern repair sweep");
+    await member.getByLabel("People").fill("9");
+    await member.getByLabel("Volunteer hours").fill("18");
+    await member.getByLabel("Measured result").fill("31 lanterns repaired");
+    await member
+      .getByLabel("What happened")
+      .fill("Nine neighbours rewired and repainted the lanterns along the east walk.");
+    await member.getByRole("button", { name: /send to the review desk/i }).click();
+    await expect(member.getByText("Project filed for steward review")).toBeVisible();
+
+    // Pending projects are not on the public record, and mint nothing.
+    const anonymous = await playwright.request.newContext({ baseURL });
+    const before = (await (await anonymous.get("/api/edition")).json()) as { wins: { title: string }[] };
+    expect(before.wins.some((win) => win.title === "Lantern repair sweep")).toBe(false);
+    await anonymous.dispose();
+
+    const steward = await stewardContext.newPage();
+    await steward.goto("/login");
+    await steward.getByLabel("Email", { exact: true }).fill("steward.harbor.1@justiceleagues.local");
+    await steward.getByLabel("Password", { exact: true }).fill("millbrook");
+    await steward.getByRole("button", { name: /^sign in$/i }).click();
+    await expect(steward).toHaveURL(/\/dashboard$/);
+
+    await steward.goto("/leagues/harbor/steward");
+    const card = steward.locator("article").filter({ hasText: "Lantern repair sweep" });
+    await expect(card).toContainText("+140 JP");
+    await card.getByRole("button", { name: /^approve$/i }).click();
+    await card.getByRole("button", { name: /confirm \+140 jp/i }).click();
+    await expect(steward.getByText("Project approved")).toBeVisible();
+
+    await member.reload();
+    await expect(member.getByText("Lantern repair sweep")).toBeVisible();
+    await expect(member.getByText("+140 JP").first()).toBeVisible();
+    await expect(member.getByRole("link", { name: /your justice points: 165/i })).toBeVisible();
+  } finally {
+    await memberContext.close();
+    await stewardContext.close();
+  }
+});

@@ -8,6 +8,7 @@ import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
 import { useLeagueContext } from "./context";
 import { DAYS, initials } from "./constants";
+import { ProjectReview } from "./ProjectReview";
 
 const STATUS_STYLE = {
   attended: "bg-forest text-paper",
@@ -442,6 +443,8 @@ export default function LeagueSteward() {
           </div>
         </section>
       </div>
+
+      <ProjectReview />
     </div>
   );
 }

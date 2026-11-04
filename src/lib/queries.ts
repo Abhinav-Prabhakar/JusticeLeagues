@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ShiftDTO, ShiftRosterDTO } from "./types";
+import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ProjectDTO, ShiftDTO, ShiftRosterDTO } from "./types";
 import { api, initialEdition, STATIC_PREVIEW, staticLeagueDetail } from "./api";
 import { useApp } from "../ctx";
 
@@ -279,6 +279,64 @@ export function useCancelShiftAsSteward() {
       invalidateEdition(client);
       void client.invalidateQueries({ queryKey: ["roster"] });
       toast("Shift cancelled");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export interface NewProjectInput {
+  leagueId: string;
+  chapterId: string;
+  title: string;
+  summary: string;
+  occurredOn: string;
+  people: number;
+  hours: number;
+  amount?: string;
+  evidenceUrl?: string;
+}
+
+export function useLeagueProjects(leagueId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["projects", leagueId],
+    queryFn: () => api<{ projects: ProjectDTO[] }>(`/api/leagues/${leagueId}/projects`),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 10_000,
+    retry: 1,
+  });
+}
+
+export function useSubmitProject() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ leagueId, ...body }: NewProjectInput) =>
+      api<ProjectDTO>(`/api/leagues/${leagueId}/projects`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (project) => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["projects", project.league] });
+      toast("Project filed for steward review");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useReviewProject() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ projectId, decision }: { projectId: string; decision: "approve" | "reject" }) =>
+      api<ProjectDTO>(`/api/projects/${projectId}/review`, {
+        method: "POST",
+        body: JSON.stringify({ decision }),
+      }),
+    onSuccess: (project) => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["projects", project.league] });
+      if (project.status === "approved") toast("Project approved", project.points);
+      else toast("Project rejected — no points awarded");
     },
     onError: (error) => toast(error.message),
   });

@@ -217,3 +217,82 @@ describe("steward API", () => {
     expect(after.shifts.some((item) => item.id === shift.id)).toBe(false);
   });
 });
+
+describe("project API", () => {
+  async function loginSteward(email: string) {
+    const response = await post("/api/auth/login", { email, password: "millbrook" });
+    expect(response.status).toBe(200);
+    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+  }
+
+  const draft = {
+    chapterId: "ch_harbor_2",
+    title: "Riverfront replanting",
+    summary: "Twelve neighbours replanted the east bank with native shrubs over two weekends.",
+    occurredOn: "2026-05-04",
+    people: 12,
+    hours: 30,
+    amount: "120 saplings",
+    evidenceUrl: "https://example.com/evidence",
+  };
+
+  it("files a project, then a steward approval writes points and the public win", async () => {
+    const stewardCookie = await loginSteward("steward.harbor.1@justiceleagues.local");
+    const member = await register("projector@example.com", "Project Filer");
+
+    const joined = await app.request("/api/leagues/harbor/join", {
+      method: "POST",
+      headers: { cookie: member.cookie },
+    });
+    expect(joined.status).toBe(200);
+
+    const filed = await post("/api/leagues/harbor/projects", draft, member.cookie);
+    expect(filed.status).toBe(201);
+    const project = (await filed.json()) as { id: string; status: string; points: number; facts: unknown };
+    expect(project).toMatchObject({ status: "submitted", points: 0 });
+
+    const denied = await post(`/api/projects/${project.id}/review`, { decision: "approve" }, member.cookie);
+    expect(denied.status).toBe(403);
+
+    const queue = await app.request("/api/leagues/harbor/projects", { headers: { cookie: stewardCookie } });
+    expect(queue.status).toBe(200);
+    const listed = (await queue.json()) as { projects: { id: string }[] };
+    expect(listed.projects.some((item) => item.id === project.id)).toBe(true);
+
+    const approved = await post(`/api/projects/${project.id}/review`, { decision: "approve" }, stewardCookie);
+    expect(approved.status).toBe(200);
+    const reviewed = (await approved.json()) as { status: string; points: number };
+    expect(reviewed).toMatchObject({ status: "approved", points: 194 });
+
+    const edition = (await (await app.request("/api/edition")).json()) as {
+      leagues: { id: string; projects: number }[];
+      wins: { id: string; jp: number }[];
+      me: null;
+    };
+    expect(edition.wins.find((win) => win.id === project.id)?.jp).toBe(194);
+    expect(edition.leagues.find((league) => league.id === "harbor")!.projects).toBe(97);
+
+    const me = (await (await app.request("/api/auth/me", { headers: { cookie: member.cookie } })).json()) as {
+      me: { points: number };
+    };
+    expect(me.me.points).toBe(25 + 194);
+  });
+
+  it("refuses outsiders and malformed projects", async () => {
+    const outsider = await register("outsider@example.com", "Outside Member");
+
+    const denied = await post("/api/leagues/harbor/projects", draft, outsider.cookie);
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as { code: string }).code).toBe("not_member");
+
+    const invalid = await post("/api/leagues/harbor/projects", { title: "Too little" }, outsider.cookie);
+    expect(invalid.status).toBe(400);
+
+    const badEvidence = await post(
+      "/api/leagues/harbor/projects",
+      { ...draft, evidenceUrl: "javascript:alert(1)" },
+      outsider.cookie,
+    );
+    expect(badEvidence.status).toBe(400);
+  });
+});

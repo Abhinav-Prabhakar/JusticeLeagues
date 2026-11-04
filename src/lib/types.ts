@@ -55,6 +55,29 @@ export interface WinDTO {
   photo: number;
   when: string;
   facts: { people: number; hours: number; amount: string };
+  chapterId?: string | null;
+  summary?: string;
+  evidenceUrl?: string | null;
+}
+
+export type ProjectStatus = "submitted" | "approved" | "rejected";
+
+export interface ProjectDTO {
+  id: string;
+  league: string;
+  chapterId: string | null;
+  title: string;
+  summary: string;
+  occurredOn: string;
+  facts: { people: number; hours: number; amount: string };
+  evidenceUrl: string | null;
+  photo: number;
+  status: ProjectStatus;
+  /** Points the project is worth; awarded only once it is approved. */
+  points: number;
+  submittedBy: PublicProfileDTO | null;
+  reviewedAt: string | null;
+  createdAt: string;
 }
 
 export interface ProfileDTO {
