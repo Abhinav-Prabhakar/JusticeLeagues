@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EditionDTO, LeagueDTO, MeDTO, ShiftDTO } from "./types";
+import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ShiftDTO } from "./types";
 import { api, initialEdition } from "./api";
 import { useApp } from "../ctx";
 
@@ -31,6 +31,25 @@ export function useEdition() {
 
 export function useCurrentUser(): MeDTO | null {
   return useEdition().data?.me ?? null;
+}
+
+export interface LeagueDetail {
+  league: LeagueDTO;
+  members: LeagueMemberDTO[];
+}
+
+export function useLeagueDetail(leagueId: string) {
+  return useQuery({
+    queryKey: ["league", leagueId],
+    queryFn: () => api<LeagueDetail>(`/api/leagues/${leagueId}`),
+    staleTime: 20_000,
+    retry: 1,
+  });
+}
+
+function invalidateEdition(client: ReturnType<typeof useQueryClient>) {
+  void client.invalidateQueries({ queryKey: KEY });
+  void client.invalidateQueries({ queryKey: ["league"] });
 }
 
 export function useJoinLeague() {
@@ -77,7 +96,7 @@ export function useJoinLeague() {
         result.awarded ? 25 : undefined,
       );
     },
-    onSettled: () => client.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => invalidateEdition(client),
   });
 }
 
@@ -110,7 +129,7 @@ export function useLeaveLeague() {
       toast(error.message);
     },
     onSuccess: (_result, league) => toast(`You left ${league.name}`),
-    onSettled: () => client.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => invalidateEdition(client),
   });
 }
 
@@ -149,7 +168,7 @@ export function useSignupShift() {
     onSuccess: (result, shift) => {
       toast(result.autoJoined ? `Joined the league and claimed ${shift.title}` : `You're on: ${shift.title}`);
     },
-    onSettled: () => client.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => invalidateEdition(client),
   });
 }
 
@@ -180,7 +199,7 @@ export function useCancelShift() {
       toast(error.message);
     },
     onSuccess: () => toast("Shift cancelled"),
-    onSettled: () => client.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => invalidateEdition(client),
   });
 }
 
@@ -223,7 +242,7 @@ export function useAuth() {
       const previous = client.getQueryData<EditionDTO>(KEY);
       if (previous) client.setQueryData<EditionDTO>(KEY, { ...previous, me: null });
     },
-    onSettled: () => client.invalidateQueries({ queryKey: KEY }),
+    onSettled: () => invalidateEdition(client),
   });
 
   return { register, login, logout };

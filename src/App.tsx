@@ -7,6 +7,11 @@ import { NotFound } from "./routes/NotFound";
 
 const Leagues = lazy(() => import("./routes/Leagues"));
 const LeaguePage = lazy(() => import("./routes/LeaguePage"));
+const LeagueOverview = lazy(() => import("./routes/league/Overview"));
+const LeagueShifts = lazy(() => import("./routes/league/Shifts"));
+const LeagueChapters = lazy(() => import("./routes/league/Chapters"));
+const LeagueMembers = lazy(() => import("./routes/league/Members"));
+const LeagueImpact = lazy(() => import("./routes/league/Impact"));
 const Dashboard = lazy(() => import("./routes/Dashboard"));
 const Login = lazy(() => import("./routes/Login"));
 const Register = lazy(() => import("./routes/Register"));
@@ -18,7 +23,13 @@ export default function App() {
         <Route element={<RootLayout />}>
           <Route index element={<Home />} />
           <Route path="leagues" element={<Leagues />} />
-          <Route path="leagues/:id" element={<LeaguePage />} />
+          <Route path="leagues/:id" element={<LeaguePage />}>
+            <Route index element={<LeagueOverview />} />
+            <Route path="shifts" element={<LeagueShifts />} />
+            <Route path="chapters" element={<LeagueChapters />} />
+            <Route path="members" element={<LeagueMembers />} />
+            <Route path="impact" element={<LeagueImpact />} />
+          </Route>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
