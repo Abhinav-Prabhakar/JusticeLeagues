@@ -9,7 +9,8 @@
  * writes desktop + mobile screenshots into docs/screenshots/. It then signs in
  * as a seeded chapter steward, records one attendance, and captures the desk.
  */
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { chromium } from "@playwright/test";
 
 const base = process.env.BASE_URL ?? "http://localhost:5176";
@@ -20,6 +21,25 @@ const password = "correct horse battery";
 await mkdir(outDir, { recursive: true });
 
 const browser = await chromium.launch();
+
+/** Convert a captured PNG to WebP in place; keep the PNG if no encoder exists. */
+async function compress(name) {
+  const png = `${outDir}/${name}.png`;
+  const webp = `${outDir}/${name}.webp`;
+  try {
+    execFileSync("cwebp", ["-quiet", "-q", "84", png, "-o", webp]);
+    await rm(png, { force: true });
+    return;
+  } catch {
+    // fall through
+  }
+  try {
+    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", png, "-quality", "84", webp]);
+    await rm(png, { force: true });
+  } catch {
+    console.warn(`no WebP encoder found; left ${png}`);
+  }
+}
 
 async function settle(page) {
   await page.waitForLoadState("networkidle");
@@ -46,6 +66,7 @@ async function settle(page) {
 async function shoot(page, name, fullPage = false) {
   await settle(page);
   await page.screenshot({ path: `${outDir}/${name}.png`, fullPage });
+  await compress(name);
   console.log(`captured ${name}${fullPage ? " (full page)" : ""}`);
 }
 
@@ -146,7 +167,19 @@ await reviewDesk.scrollIntoViewIfNeeded();
 await steward.evaluate(() => window.scrollBy(0, -90));
 await steward.waitForTimeout(500);
 await steward.screenshot({ path: `${outDir}/projects.png` });
+await compress("projects");
 console.log("captured projects (review desk)");
+
+// Approve the filed project, then show the public record it produces.
+const filed = steward.locator("section").filter({ hasText: "Filed projects" });
+await filed.getByRole("button", { name: /^approve$/i }).click();
+await filed.getByRole("button", { name: /^confirm \+\d+ jp$/i }).click();
+await steward.getByText(/project approved/i).waitFor();
+await steward.goto(`${base}/ledger`);
+await shoot(steward, "ledger", true);
+
+await steward.goto(`${base}/leagues/harbor/impact`);
+await shoot(steward, "impact", true);
 
 // The masthead settings, with the owner signed in.
 await steward.goto(`${base}/leagues/harbor/settings`);

@@ -6,7 +6,7 @@
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-59_unit_%C2%B7_13_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-77_unit_%C2%B7_17_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
@@ -35,7 +35,12 @@
 - **A masthead the owner keeps.** Stewards edit the name, motto, cause, and recruiting flag; only the owner can archive the league.
 - **A borrow shelf, not a scoreboard.** Neighbours post offers and needs, claim them, hand them back, and close the loop — with no Justice Points attached.
 - **A front door a steward controls.** Mint a single-use invitation link for a member or a steward, filed under a chapter.
-- **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12; an approved project awards 50–500.
+- **Leaderboards the server ranks.** Global, month, cause, city, and chapter standings come from a cached table rebuilt on every ledger write — never a client sort.
+- **Badges and weeks on.** Thirteen badges and a streak are earned from the record, not handed out. Your desk shows what you have and what is next.
+- **A public record.** Every award lands on [`/ledger`](src/routes/LedgerPage.tsx) with its author, kind, and delta. A steward correction appends a negative row; it never rewrites history.
+- **A review desk, not a rubber stamp.** Soft caps and evidence-free projects queue for a steward, who can clear or reverse with an auditable note.
+- **A real impact page.** Chapter, category, and month totals are aggregated from the ledger, and the chapter bars always sum to the league total.
+- **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12 (capped at 80); an approved project awards `50 + 4×hours + 2×people`, clamped 50–500.
 
 > Points land when a steward checks you in — not when you tap sign up. That distinction is the whole leaderboard.
 
@@ -48,11 +53,15 @@
   </tr>
   <tr>
     <td width="50%"><a href="docs/screenshots/chapters.webp"><img src="docs/screenshots/chapters.webp" alt="Neighbourhood chapter cards with points, members, and shifts" /></a><br/><sub><b>Chapters</b> · every point rolls up to the citywide league</sub></td>
-    <td width="50%"><a href="docs/screenshots/dashboard.webp"><img src="docs/screenshots/dashboard.webp" alt="Personal desk with points, roster, and ledger" /></a><br/><sub><b>Your desk</b> · points, roster, and the ledger</sub></td>
+    <td width="50%"><a href="docs/screenshots/dashboard.webp"><img src="docs/screenshots/dashboard.webp" alt="Personal desk with points, roster, badges, and streak" /></a><br/><sub><b>Your desk</b> · points, roster, badges, and the ledger</sub></td>
   </tr>
   <tr>
     <td width="50%"><a href="docs/screenshots/resources.webp"><img src="docs/screenshots/resources.webp" alt="The league exchange with offers, needs, and a claimed classified" /></a><br/><sub><b>The exchange</b> · offers and needs, claimed and closed</sub></td>
     <td width="50%"><a href="docs/screenshots/projects.webp"><img src="docs/screenshots/projects.webp" alt="Steward reviewing a filed project with its metrics and evidence" /></a><br/><sub><b>The review desk</b> · members file the work, stewards approve the points</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/ledger.webp"><img src="docs/screenshots/ledger.webp" alt="The public points ledger with filters, totals, and every award" /></a><br/><sub><b>The public record</b> · every award, its author, and its delta</sub></td>
+    <td width="50%"><a href="docs/screenshots/impact.webp"><img src="docs/screenshots/impact.webp" alt="League impact by chapter, category, and month" /></a><br/><sub><b>Impact</b> · chapters, categories, and months from the ledger</sub></td>
   </tr>
   <tr>
     <td width="50%"><a href="docs/screenshots/invite.webp"><img src="docs/screenshots/invite.webp" alt="A single-use league invitation with the invited chapter and role" /></a><br/><sub><b>The invitation</b> · a single-use link, filed under a chapter</sub></td>
@@ -80,12 +89,18 @@
 
 <img src="docs/architecture.svg" alt="Browser to Hono API to SQLite" width="100%" />
 
-| Layer  | Choice                                                           |
-| ------ | ---------------------------------------------------------------- |
-| UI     | React 19 · Vite · Tailwind 4 · TanStack Query                    |
-| API    | Hono on Node · Zod · scrypt · hashed session cookies             |
-| Data   | `node:sqlite` · plain-SQL migrations · append-only points ledger |
-| Assets | Photography and fonts vendored into `public/` — fully offline    |
+| Layer  | Choice                                                            |
+| ------ | ----------------------------------------------------------------- |
+| UI     | React 19 · Vite · Tailwind 4 · TanStack Query                     |
+| API    | Hono on Node · Zod · scrypt · hashed session cookies              |
+| Data   | `node:sqlite` · plain-SQL migrations · append-only points ledger  |
+| Ranks  | `league_standings` / `chapter_standings` caches, rebuilt on write |
+| Assets | Photography and fonts vendored into `public/` — fully offline     |
+
+Points flow one way: an action hits a Hono route, the repository validates it,
+the ledger appends a row, and the standings cache is rebuilt inside the same
+transaction. The browser can read standings and the ledger; it cannot send a
+delta.
 
 ## Run it
 
@@ -103,7 +118,7 @@ npm start          # dist/ + /api on :8787
 
 ### Static edition
 
-The GitHub Pages build is the same paper with the press stopped: browse every league, chapter, roster, and shift, but accounts and points live only in the local database.
+The GitHub Pages build is the same paper with the press stopped: browse every league, chapter, roster, shift, standings table, and the public record. Accounts and new points live only in the local database, so the static edition falls back to the printed fixtures for standings and the ledger.
 
 ```bash
 npm run build:pages   # /JusticeLeagues/ base, hash routes, fixtures only
@@ -141,8 +156,8 @@ Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 59 unit + API integration tests
-npm run test:e2e   # 13 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 77 unit + API integration tests
+npm run test:e2e   # 17 Playwright tests, isolated :8788 / :5174 / data/e2e.db
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

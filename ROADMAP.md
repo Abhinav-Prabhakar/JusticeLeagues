@@ -1,10 +1,9 @@
 # Justice Leagues — Prototype → Production Plan
 
-Status: **Phase 2 complete**. The SQLite substrate, local auth, persisted
-signups, neighbourhood chapters, the tabbed league shell, steward check-in,
-steward shift authoring, shift waitlists and editing, project approval, the
-resource exchange, chapter invitations, member removal, and league settings are
-real. Standings cache and the server-side leaderboard are Phase 3.
+Status: **Phase 3 complete**. The ledger is the single source of truth, the
+standings cache and leaderboard are real, badges and streaks are earned from
+the record, and stewards have an anomaly queue with an append-only reversal
+tool. The public ledger page is live.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -159,15 +158,22 @@ Rules:
 
 Points are the product's credibility. Treat them like money.
 
-Earning rules (server-enforced, versioned in `points_rules`):
+Earning rules (server-enforced constants in `server/db/repository.ts` and
+`src/data/projects.ts`):
 
-| Event                   | Points                      | Guard                           |
-| ----------------------- | --------------------------- | ------------------------------- |
-| First league joined     | +25 once per profile        | unique ledger key               |
-| Verified shift attended | hours × 10, cap 80/shift    | steward check-in                |
-| Project approved        | 50–500 by metric + evidence | steward review, one per project |
-| Resource fulfilled      | +15                         | both sides confirm              |
-| Weekly streak           | +20 per active week, cap 4  | computed nightly                |
+| Event                   | Points                                    | Guard                               |
+| ----------------------- | ----------------------------------------- | ----------------------------------- |
+| First league joined     | +25 once per profile                      | unique ledger key                   |
+| Verified shift attended | hours × 12, capped at 80 per shift        | steward check-in, 5 check-ins/day   |
+| Project approved        | `50 + 4×hours + 2×people`, clamped 50–500 | steward review, one per project     |
+| Resource fulfilled      | not minted — tracked on the exchange      | both sides confirm                  |
+| Weekly streak           | not minted — badge + streak display only  | computed from positive ledger weeks |
+
+Badges (13, evaluated server-side in `server/db/badges.ts`): first join, first
+shift, five/ten shifts, first/three projects, 100/1000 points, four-week and
+twelve-week streaks, chapter builder, ledger keeper, and charter steward.
+Resource fulfilment and the weekly streak are deliberately display-only right
+now: the ledger stays small and every row is defensible.
 
 Non-negotiables:
 
@@ -175,10 +181,12 @@ Non-negotiables:
 - Idempotency key per event (`shift:<id>:<profile>`), so retries cannot double-award.
 - Soft caps + anomaly flags (e.g. 40h/week, >5 check-ins/day) go to steward review.
 - Public ledger page shows every award: who, what, when, how much.
-- Leaderboard scopes: global / city / cause / chapter / month, with a
-  minimum-activity threshold so a brand-new league with one big project does not
-  top the table.
-- Chapter points must sum to league points. One ledger, two rollups.
+- Leaderboard scopes: global / city / cause / chapter / month. Ranks are cached
+  in `league_standings` / `chapter_standings` and rebuilt on every ledger write.
+  For this single-city prototype "city" is the all-time total; "month" is a true
+  calendar-month sum with a pace-adjusted delta for "most improved".
+- Chapter points must sum to league points. One ledger, two rollups — asserted
+  by tests.
 
 ---
 
@@ -262,19 +270,35 @@ The core product. A real route, not a drawer.
 shift → fill it → waitlist a neighbour → check in → log hours → approve a
 project → see points and rank update at both chapter and league level.
 
-### Phase 3 — Standings, impact, and anti-gaming (1–2 weeks)
+### Phase 3 — Standings, impact, and anti-gaming (1–2 weeks) — **complete**
 
-- `league_standings` cache table rebuilt in the same transaction as ledger writes.
+- `league_standings` / `chapter_standings` cache tables rebuilt inside the same
+  transaction as every ledger write and once on startup. ✅ Rebuild is a
+  handful of set-based queries: a temp aggregate table plus one windowed
+  `INSERT OR REPLACE … SELECT` assigns all four ranks.
 - Server-side leaderboard with scopes (global / city / cause / chapter / month)
-  and tie-breakers.
+  and deterministic tie-breakers (points, then members, then league id). ✅
+  `GET /api/standings`; the sidebar and Overview read cached ranks, never a
+  client sort.
 - Real impact ledger aggregation from approved projects (not hard-coded rows).
-- Tiers/badges, streaks, monthly resets, "most improved" editorial module.
-- Rate limits, caps, anomaly queue, admin reversal tool.
-- Public points ledger page for transparency.
+  ✅ `GET /api/impact` and `GET /api/leagues/:id/impact`; chapters, categories
+  and the last twelve months come from the ledger.
+- Tiers/badges, streaks, monthly resets, "most improved" editorial module. ✅
+  13 badges evaluated server-side, `first_join` counts roster seats so printed-edition
+  members earn it; streaks come from positive ledger weeks; month delta is
+  pace-adjusted.
+- Rate limits, caps, anomaly queue, admin reversal tool. ✅ attendance is capped
+  at 80/shift and 5 check-ins/day; soft-cap flags queue for stewards;
+  `POST /api/leagues/:id/ledger/:entryId/reverse` appends a correction, never
+  edits, and refuses a second reversal.
+- Public points ledger page for transparency. ✅ `/ledger` filters by league and
+  entry kind, paginates, and labels imported history. A database with no live
+  awards falls back to the sealed history and says so; `?live=1` skips it.
 
-**Exit:** displayed points always equal `SUM(points_ledger)`; chapter totals sum
-to league totals; no client path can mint points; leaderboard < 300ms at 10k
-leagues.
+**Exit:** met — displayed points always equal `SUM(points_ledger)`; chapter
+totals sum to league totals; no client path can mint points; the leaderboard
+query answers in under 300ms at 10k leagues, with the cache rebuild held to a
+separate write-path budget (covered by `server/db/phase3.test.ts`).
 
 ### Phase 4 — Discovery, atlas, and sharing (1–2 weeks)
 
@@ -397,7 +421,9 @@ rollback plan.
 13. Add steward check-in (hours → ledger) and steward-authored shifts. ✅
 14. Ship project approval with evidence. ✅
 15. Ship shift waitlists/editing, member removal, and league settings. ✅
-16. Next: `league_standings` cache and the server-side leaderboard (Phase 3).
+16. Make the ledger the source of truth, add cached standings, real impact and
+    badges, and the anomaly queue + public ledger page (Phase 3). ✅
+17. Next: real coordinates, FTS5 search, and a shareable atlas (Phase 4).
 
 Done when: a stranger can join a league, claim a shift, and see verified points
-that a steward — not a browser — awarded.
+that a steward — not a browser — awarded. **Met.**
