@@ -7,7 +7,9 @@ import {
   AppError,
   JOIN_POINTS,
   cancelShift,
+  cancelShiftAsSteward,
   checkInShift,
+  createShift,
   getMe,
   getShiftRoster,
   joinLeague,
@@ -206,5 +208,63 @@ describe("steward check-in", () => {
     const members = listMembers(db, "harbor");
     expect(members.filter((member) => member.role === "owner")).toHaveLength(1);
     expect(members.filter((member) => member.role === "steward")).toHaveLength(2);
+  });
+});
+
+describe("shift authoring", () => {
+  const OWNER = "usr_seed_harbor_1";
+
+  it("posts a shift to a chapter and cancels it with its reservations", () => {
+    const shift = createShift(db, OWNER, "harbor", {
+      chapterId: "ch_harbor_2",
+      title: "Lantern walk",
+      day: 2,
+      time: "18:30",
+      duration: "2h",
+      capacity: 6,
+      place: "City Centre square",
+    });
+
+    expect(shift.league).toBe("harbor");
+    expect(shift.chapterId).toBe("ch_harbor_2");
+    expect(shift.spots).toBe(6);
+    expect(shift.time).toBe("18:30");
+
+    makeProfile("usr_newshift");
+    signupShift(db, "usr_newshift", shift.id);
+    expect(listShifts(db).find((item) => item.id === shift.id)?.filled).toBe(1);
+
+    cancelShiftAsSteward(db, OWNER, shift.id);
+    expect(listShifts(db).find((item) => item.id === shift.id)).toBeUndefined();
+    expect(getMe(db, "usr_newshift").signups).toHaveLength(0);
+  });
+
+  it("refuses a plain member and a chapter from another league", () => {
+    makeProfile("usr_plain2");
+    joinLeague(db, "usr_plain2", "harbor");
+
+    expect(() =>
+      createShift(db, "usr_plain2", "harbor", {
+        chapterId: "ch_harbor",
+        title: "Unauthorised shift",
+        day: 1,
+        time: "09:00",
+        duration: "2h",
+        capacity: 4,
+        place: "Dock 4",
+      }),
+    ).toThrowError(/steward/);
+
+    expect(() =>
+      createShift(db, OWNER, "harbor", {
+        chapterId: "ch_spoke",
+        title: "Wrong chapter",
+        day: 1,
+        time: "09:00",
+        duration: "2h",
+        capacity: 4,
+        place: "Dock 4",
+      }),
+    ).toThrowError(/chapter/);
   });
 });

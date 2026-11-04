@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useParams, Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation, useParams, Link } from "react-router-dom";
 import {
   CalendarDays,
   Compass,
@@ -32,14 +33,28 @@ const STEWARD_TAB = { to: "steward", label: "Steward", icon: ShieldCheck, end: f
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>();
   const { data } = useEdition();
+  const navRef = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+  const membership = activeMembership(data.me, id ?? "");
+  const isSteward = membership?.role === "owner" || membership?.role === "steward";
   const l = data.leagues.find((x) => x.id === id);
   usePageTitle(l ? `${l.name} — The Justice Leagues` : "League not found — The Justice Leagues");
+
+  // Keep the active tab in view on narrow screens without moving the page.
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !active) return;
+    nav.scrollTo({
+      left: active.offsetLeft - nav.clientWidth / 2 + active.clientWidth / 2,
+      behavior: "smooth",
+    });
+  }, [pathname, isSteward]);
+
   if (!l) return <NotFound />;
 
   const c = CAUSES[l.cause];
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
-  const membership = activeMembership(data.me, l.id);
-  const isSteward = membership?.role === "owner" || membership?.role === "steward";
   const tabs = isSteward ? [...TABS, STEWARD_TAB] : TABS;
   const myChapter = l.chapters.find((chapter) => chapter.id === membership?.chapterId);
   const rank = [...data.leagues].sort((a, b) => b.points - a.points).findIndex((x) => x.id === l.id) + 1;
@@ -130,6 +145,7 @@ export default function LeaguePage() {
       </div>
 
       <nav
+        ref={navRef}
         aria-label="League sections"
         className="border-ink bg-paper/95 no-scrollbar sticky top-[60px] z-30 -mx-4 mt-6 flex gap-1 overflow-x-auto border-b-2 px-4 backdrop-blur-md md:mx-0 md:px-0"
       >
@@ -140,7 +156,7 @@ export default function LeaguePage() {
             end={tab.end}
             className={({ isActive }) =>
               cn(
-                "group flex shrink-0 items-center gap-1.5 border-b-[3px] px-2.5 py-3 font-sans text-[10px] font-extrabold tracking-wider uppercase transition-colors sm:px-3 sm:text-[11px]",
+                "group flex shrink-0 items-center gap-1 border-b-[3px] px-2 py-3 font-sans text-[10px] font-extrabold tracking-normal uppercase transition-colors sm:gap-1.5 sm:px-3 sm:text-[11px] sm:tracking-wider",
                 isActive ? "border-vermilion text-ink" : "text-ink-3 hover:text-ink border-transparent",
               )
             }

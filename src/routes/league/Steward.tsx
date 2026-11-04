@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, Check, Clock, MapPin, ShieldCheck, Sparkles, UserRound, Users, X } from "lucide-react";
+import { CalendarDays, Check, Clock, MapPin, Plus, ShieldCheck, Sparkles, UserRound, Users, X } from "lucide-react";
 import { CAUSES, fmt } from "../../data";
 import { activeMembership } from "../../lib/api";
-import { useCheckIn, useShiftRoster } from "../../lib/queries";
+import { useCancelShiftAsSteward, useCheckIn, useCreateShift, useShiftRoster } from "../../lib/queries";
 import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
 import { useLeagueContext } from "./context";
@@ -27,8 +27,21 @@ export default function LeagueSteward() {
     .filter((shift) => shift.league === l.id)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const [selected, setSelected] = useState<string | null>(shifts[0]?.id ?? null);
-  const roster = useShiftRoster(isSteward ? selected : null);
+  const activeId = selected && shifts.some((shift) => shift.id === selected) ? selected : (shifts[0]?.id ?? null);
+  const roster = useShiftRoster(isSteward ? activeId : null);
   const checkIn = useCheckIn();
+  const create = useCreateShift();
+  const cancelShift = useCancelShiftAsSteward();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [form, setForm] = useState({
+    chapterId: l.chapters[0]?.id ?? "",
+    title: "",
+    day: 5,
+    time: "10:00",
+    duration: "2h",
+    capacity: 8,
+    place: "",
+  });
 
   if (!isSteward) {
     return (
@@ -56,8 +69,35 @@ export default function LeagueSteward() {
   }
 
   const busy = checkIn.isPending;
-  const activeShift = roster.data?.shift ?? shifts.find((shift) => shift.id === selected);
+  const activeShift = roster.data?.shift ?? shifts.find((shift) => shift.id === activeId);
   const pointsPerHour = roster.data?.pointsPerHour ?? 12;
+
+  const postShift = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    create.mutate(
+      { leagueId: l.id, ...form, capacity: Number(form.capacity) },
+      {
+        onSuccess: (shift) => {
+          setSelected(shift.id);
+          setForm((previous) => ({ ...previous, title: "", place: "" }));
+        },
+      },
+    );
+  };
+
+  const cancelActiveShift = () => {
+    if (!activeShift) return;
+    if (!confirmCancel) {
+      setConfirmCancel(true);
+      return;
+    }
+    cancelShift.mutate(activeShift.id, {
+      onSuccess: () => {
+        setConfirmCancel(false);
+        setSelected(null);
+      },
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -85,6 +125,118 @@ export default function LeagueSteward() {
         <span className="text-ink-3 ml-auto">Signing up mints nothing. Attendance is final.</span>
       </div>
 
+      <details className="border-ink bg-paper-2 group border-2">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <span className="kicker text-ink flex items-center gap-1.5">
+            <Plus size={13} /> Post a shift
+          </span>
+          <span className="text-ink-3 font-mono text-[10px]">Appears on the roster immediately</span>
+        </summary>
+        <form
+          onSubmit={postShift}
+          className="border-ink/20 grid gap-3 border-t px-4 py-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          <label className="block sm:col-span-2">
+            <span className="kicker text-ink-3 text-[9px]">Title</span>
+            <input
+              required
+              minLength={3}
+              maxLength={80}
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              placeholder="Riverfront tree planting"
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            />
+          </label>
+          <label className="block">
+            <span className="kicker text-ink-3 text-[9px]">Chapter</span>
+            <select
+              value={form.chapterId}
+              onChange={(event) => setForm({ ...form, chapterId: event.target.value })}
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            >
+              {l.chapters.map((chapter) => (
+                <option key={chapter.id} value={chapter.id}>
+                  {chapter.hood}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="kicker text-ink-3 text-[9px]">Place</span>
+            <input
+              required
+              minLength={2}
+              maxLength={80}
+              value={form.place}
+              onChange={(event) => setForm({ ...form, place: event.target.value })}
+              placeholder="Mill River footbridge"
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            />
+          </label>
+          <label className="block">
+            <span className="kicker text-ink-3 text-[9px]">Day</span>
+            <select
+              value={form.day}
+              onChange={(event) => setForm({ ...form, day: Number(event.target.value) })}
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            >
+              {DAYS.map((day, index) => (
+                <option key={day} value={index}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="kicker text-ink-3 text-[9px]">Start</span>
+            <input
+              type="time"
+              required
+              value={form.time}
+              onChange={(event) => setForm({ ...form, time: event.target.value })}
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            />
+          </label>
+          <label className="block">
+            <span className="kicker text-ink-3 text-[9px]">Duration</span>
+            <select
+              value={form.duration}
+              onChange={(event) => setForm({ ...form, duration: event.target.value })}
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            >
+              {["1h", "2h", "3h", "4h"].map((duration) => (
+                <option key={duration} value={duration}>
+                  {duration}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="kicker text-ink-3 text-[9px]">Capacity</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              required
+              value={form.capacity}
+              onChange={(event) => setForm({ ...form, capacity: Number(event.target.value) })}
+              className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+            />
+          </label>
+          <div className="flex items-end sm:col-span-2 lg:col-span-4">
+            <button
+              type="submit"
+              disabled={create.isPending}
+              className="btn-press border-ink bg-mustard rounded-full border-2 px-5 py-2.5 font-sans text-[10px] font-extrabold tracking-wider uppercase disabled:opacity-40"
+            >
+              {create.isPending ? "Posting…" : "Put it on the roster"}
+            </button>
+            <span className="text-ink-3 ml-3 font-mono text-[9px]">Signups open the moment it is posted.</span>
+          </div>
+        </form>
+      </details>
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="space-y-2.5">
           {shifts.length === 0 && (
@@ -93,13 +245,16 @@ export default function LeagueSteward() {
             </div>
           )}
           {shifts.map((shift) => {
-            const active = shift.id === selected;
+            const active = shift.id === activeId;
             const open = Math.max(0, shift.spots - shift.filled);
             return (
               <button
                 key={shift.id}
                 type="button"
-                onClick={() => setSelected(shift.id)}
+                onClick={() => {
+                  setSelected(shift.id);
+                  setConfirmCancel(false);
+                }}
                 aria-pressed={active}
                 className={cn(
                   "btn-press block w-full border-2 px-4 py-3 text-left transition-colors",
@@ -154,11 +309,22 @@ export default function LeagueSteward() {
                 <span>
                   {activeShift.filled}/{activeShift.spots} filled
                 </span>
+                <button
+                  type="button"
+                  onClick={cancelActiveShift}
+                  disabled={cancelShift.isPending}
+                  className={cn(
+                    "btn-press ml-auto rounded-full border-2 px-2.5 py-1 font-sans text-[8px] font-extrabold tracking-wider uppercase disabled:opacity-40",
+                    confirmCancel ? "border-vermilion bg-vermilion text-paper" : "border-vermilion/50 text-vermilion",
+                  )}
+                >
+                  {cancelShift.isPending ? "Cancelling…" : confirmCancel ? "Confirm cancel" : "Cancel shift"}
+                </button>
               </div>
             )}
           </div>
 
-          {roster.isPending && selected ? (
+          {roster.isPending && activeId ? (
             <div className="divide-ink/15 divide-y" aria-label="Loading roster">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-5 py-4">
@@ -224,7 +390,7 @@ export default function LeagueSteward() {
                               type="button"
                               onClick={() =>
                                 checkIn.mutate({
-                                  shiftId: selected!,
+                                  shiftId: activeId!,
                                   profileId: entry.profile.id,
                                   status: "attended",
                                 })
@@ -240,7 +406,7 @@ export default function LeagueSteward() {
                                 type="button"
                                 onClick={() =>
                                   checkIn.mutate({
-                                    shiftId: selected!,
+                                    shiftId: activeId!,
                                     profileId: entry.profile.id,
                                     status: "no_show",
                                   })

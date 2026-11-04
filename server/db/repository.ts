@@ -1,4 +1,5 @@
 import { newId, transaction, type Db } from "../db";
+import { shiftStart } from "./schedule";
 import type {
   ChapterDTO,
   EditionDTO,
@@ -682,5 +683,72 @@ export function checkInShift(
     ).run(status, hours, now, actorId, now, shiftId, profileId);
 
     return { awarded, roster: readRoster(db, shiftId) };
+  });
+}
+
+export interface CreateShiftInput {
+  chapterId: string;
+  title: string;
+  day: number;
+  time: string;
+  duration: string;
+  capacity: number;
+  place: string;
+  bring?: string[];
+}
+
+export function createShift(db: Db, actorId: string, leagueId: string, input: CreateShiftInput): ShiftDTO {
+  return transaction(db, () => {
+    assertSteward(db, actorId, leagueId);
+
+    const chapter = db
+      .prepare("SELECT id FROM chapters WHERE id = ? AND league_id = ?")
+      .get(input.chapterId, leagueId) as { id: string } | undefined;
+    if (!chapter) {
+      throw new AppError(400, "invalid_chapter", "That chapter is not part of this league.");
+    }
+
+    const id = newId("shf");
+    db.prepare(
+      `INSERT INTO shifts (
+         id, league_id, chapter_id, title, day, starts_at, duration, place_name,
+         capacity, base_filled, bring, status, created_by
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'open', ?)`,
+    ).run(
+      id,
+      leagueId,
+      chapter.id,
+      input.title,
+      input.day,
+      shiftStart(input.day, input.time),
+      input.duration,
+      input.place,
+      input.capacity,
+      JSON.stringify(input.bring ?? []),
+      actorId,
+    );
+
+    const shift = listShifts(db).find((item) => item.id === id);
+    if (!shift) throw new Error("The new shift could not be read back.");
+    return shift;
+  });
+}
+
+export function cancelShiftAsSteward(db: Db, actorId: string, shiftId: string): { cancelled: true } {
+  return transaction(db, () => {
+    const shift = db.prepare("SELECT league_id, status FROM shifts WHERE id = ?").get(shiftId) as
+      { league_id: string; status: string } | undefined;
+    if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
+    assertSteward(db, actorId, shift.league_id);
+    if (shift.status === "cancelled") return { cancelled: true as const };
+
+    const now = new Date().toISOString();
+    db.prepare("UPDATE shifts SET status = 'cancelled', updated_at = ? WHERE id = ?").run(now, shiftId);
+    db.prepare(
+      `UPDATE shift_signups SET status = 'cancelled', updated_at = ?
+        WHERE shift_id = ? AND status IN ('reserved', 'confirmed', 'waitlist')`,
+    ).run(now, shiftId);
+
+    return { cancelled: true as const };
   });
 }

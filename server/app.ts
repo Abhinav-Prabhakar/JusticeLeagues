@@ -19,7 +19,9 @@ import {
 import {
   AppError,
   cancelShift,
+  cancelShiftAsSteward,
   checkInShift,
+  createShift,
   getEdition,
   getMe,
   getShiftRoster,
@@ -51,6 +53,17 @@ const loginSchema = z.object({
 const checkInSchema = z.object({
   profileId: z.string().trim().min(1).max(80),
   status: z.enum(["attended", "no_show"]),
+});
+
+const shiftSchema = z.object({
+  chapterId: z.string().trim().min(1).max(80),
+  title: z.string().trim().min(3).max(80),
+  day: z.number().int().min(0).max(6),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM."),
+  duration: z.string().regex(/^\d+(?:\.\d+)?h$/, "Use a duration like 2h."),
+  capacity: z.number().int().min(1).max(100),
+  place: z.string().trim().min(2).max(80),
+  bring: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
 });
 
 function slugifyHandle(value: string): string {
@@ -162,6 +175,20 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
       return c.json({ error: "Choose a volunteer and an outcome.", code: "invalid_input" }, 400);
     }
     return c.json(checkInShift(db, profile.id, c.req.param("id"), parsed.data.profileId, parsed.data.status));
+  });
+
+  app.post("/api/leagues/:id/shifts", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = shiftSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the shift details and try again.", code: "invalid_input" }, 400);
+    }
+    return c.json(createShift(db, profile.id, c.req.param("id"), parsed.data), 201);
+  });
+
+  app.delete("/api/shifts/:id", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(cancelShiftAsSteward(db, profile.id, c.req.param("id")));
   });
 
   app.post("/api/auth/register", async (c) => {

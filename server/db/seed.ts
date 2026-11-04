@@ -1,6 +1,7 @@
 import { LEAGUES, SHIFTS, WINS } from "../../src/data/fixtures";
 import { hashPassword } from "../auth/password";
 import { transaction, type Db } from "./index";
+import { shiftStart } from "./schedule";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
 
@@ -52,21 +53,6 @@ export function slugify(value: string): string {
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-}
-
-/** Monday of the current local week, so seeded shifts always read "this week". */
-function startOfWeek(): Date {
-  const now = new Date();
-  const dow = (now.getDay() + 6) % 7;
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow, 0, 0, 0, 0);
-}
-
-function shiftStart(day: number, time: string): string {
-  const d = new Date(startOfWeek());
-  d.setDate(d.getDate() + day);
-  const [hours, minutes] = time.split(":").map(Number);
-  d.setHours(hours, minutes, 0, 0);
-  return d.toISOString();
 }
 
 export function seedIfEmpty(db: Db): boolean {

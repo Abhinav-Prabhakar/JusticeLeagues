@@ -239,6 +239,47 @@ export function useCheckIn() {
   });
 }
 
+interface NewShiftInput {
+  leagueId: string;
+  chapterId: string;
+  title: string;
+  day: number;
+  time: string;
+  duration: string;
+  capacity: number;
+  place: string;
+}
+
+export function useCreateShift() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ leagueId, ...body }: NewShiftInput) =>
+      api<ShiftDTO>(`/api/leagues/${leagueId}/shifts`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (shift) => {
+      invalidateEdition(client);
+      toast(`Posted ${shift.title}`);
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useCancelShiftAsSteward() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: (shiftId: string) => api<{ cancelled: boolean }>(`/api/shifts/${shiftId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["roster"] });
+      toast("Shift cancelled");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
 interface AuthPayload {
   displayName?: string;
   email: string;

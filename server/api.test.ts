@@ -181,4 +181,39 @@ describe("steward API", () => {
     expect(response.status).toBe(403);
     expect(((await response.json()) as { code: string }).code).toBe("not_steward");
   });
+
+  it("posts and cancels a shift, but only for a steward", async () => {
+    const stewardCookie = await loginSteward("steward.harbor.1@justiceleagues.local");
+    const volunteer = await register("author@example.com", "Author Member");
+    const body = {
+      chapterId: "ch_harbor_2",
+      title: "Lantern walk",
+      day: 2,
+      time: "18:30",
+      duration: "2h",
+      capacity: 6,
+      place: "City Centre square",
+    };
+
+    const denied = await post("/api/leagues/harbor/shifts", body, volunteer.cookie);
+    expect(denied.status).toBe(403);
+
+    const created = await post("/api/leagues/harbor/shifts", body, stewardCookie);
+    expect(created.status).toBe(201);
+    const shift = (await created.json()) as { id: string; chapterId: string; spots: number };
+    expect(shift.chapterId).toBe("ch_harbor_2");
+    expect(shift.spots).toBe(6);
+
+    const edition = (await (await app.request("/api/edition")).json()) as { shifts: { id: string }[] };
+    expect(edition.shifts.some((item) => item.id === shift.id)).toBe(true);
+
+    const removed = await app.request(`/api/shifts/${shift.id}`, {
+      method: "DELETE",
+      headers: { cookie: stewardCookie },
+    });
+    expect(removed.status).toBe(200);
+
+    const after = (await (await app.request("/api/edition")).json()) as { shifts: { id: string }[] };
+    expect(after.shifts.some((item) => item.id === shift.id)).toBe(false);
+  });
 });
