@@ -13,6 +13,8 @@ import { shiftStart } from "./schedule";
 import { evaluateBadges, seedBadges } from "./badges";
 import { materializeSealedLedger } from "./sealed";
 import { rebuildStandings } from "./standings";
+import { rebuildLeagueSearch } from "./search-index";
+import { CITY_CENTRE, HOOD_COORDS, hoodCoords } from "../../src/data/geo";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
 
@@ -40,25 +42,34 @@ export function seedIfEmpty(db: Db): boolean {
 
     const hoods = [...new Set(LEAGUES.map((l) => l.hood))].sort();
     const insertHood = db.prepare(
-      "INSERT INTO neighborhoods (id, city_id, name, slug) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
+      "INSERT INTO neighborhoods (id, city_id, name, slug, lat, lng) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
     );
     for (const hood of hoods) {
-      insertHood.run(`nb_${slugify(hood)}`, CITY.id, hood, slugify(hood));
+      const coords = hoodCoords(hood);
+      insertHood.run(
+        `nb_${slugify(hood)}`,
+        CITY.id,
+        hood,
+        slugify(hood),
+        coords?.lat ?? CITY_CENTRE.lat,
+        coords?.lng ?? CITY_CENTRE.lng,
+      );
     }
 
     const insertLeague = db.prepare(`
       INSERT INTO leagues (
         id, slug, name, cause, city_id, motto, description, founded_year, photo_id,
-        atlas_x, atlas_y, delta, trend, base_points, base_city_points, base_month_points,
+        atlas_x, atlas_y, lat, lng, delta, trend, base_points, base_city_points, base_month_points,
         base_members, base_projects, base_hours, base_streak, recruiting, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
     `);
     const insertChapter = db.prepare(`
-      INSERT INTO chapters (id, league_id, neighborhood_id, name, base_points, status)
-      VALUES (?, ?, ?, ?, ?, 'active')
+      INSERT INTO chapters (id, league_id, neighborhood_id, name, lat, lng, base_points, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
     `);
 
     for (const league of LEAGUES) {
+      const coords = hoodCoords(league.hood);
       insertLeague.run(
         league.id,
         league.id,
@@ -71,6 +82,8 @@ export function seedIfEmpty(db: Db): boolean {
         league.photo,
         league.x,
         league.y,
+        coords?.lat ?? CITY_CENTRE.lat,
+        coords?.lng ?? CITY_CENTRE.lng,
         league.delta,
         JSON.stringify(league.trend),
         league.points,
@@ -87,7 +100,16 @@ export function seedIfEmpty(db: Db): boolean {
       // neighbourhoods by name carry the rest, so chapter totals still sum
       // to the league total. Shared with the static edition.
       for (const chapter of demoChapters(league)) {
-        insertChapter.run(chapter.id, league.id, `nb_${slugify(chapter.hood)}`, chapter.name, chapter.points);
+        const chapterCoords = hoodCoords(chapter.hood);
+        insertChapter.run(
+          chapter.id,
+          league.id,
+          `nb_${slugify(chapter.hood)}`,
+          chapter.name,
+          chapterCoords?.lat ?? coords?.lat ?? CITY_CENTRE.lat,
+          chapterCoords?.lng ?? coords?.lng ?? CITY_CENTRE.lng,
+          chapter.points,
+        );
       }
     }
 
@@ -199,6 +221,7 @@ export function seedIfEmpty(db: Db): boolean {
     // is built inside the same transaction as the seed.
     materializeSealedLedger(db);
     rebuildStandings(db);
+    rebuildLeagueSearch(db);
     for (const row of db.prepare("SELECT id FROM profiles").all() as unknown as { id: string }[]) {
       evaluateBadges(db, row.id);
     }
@@ -222,5 +245,45 @@ export function ensurePhase3(db: Db): { inserted: number } {
       evaluateBadges(db, row.id);
     }
     return { inserted };
+  });
+}
+
+/**
+ * Startup/backfill hook for databases seeded before Phase 4. Coordinates are
+ * derived from the shared geography table, so printed-edition databases get
+ * real positions without a reseed; then the FTS index is rebuilt.
+ */
+export function ensurePhase4(db: Db): { indexed: number; chapters: number } {
+  return transaction(db, () => {
+    db.prepare(
+      "UPDATE cities SET center_lat = COALESCE(center_lat, ?), center_lng = COALESCE(center_lng, ?) WHERE id = ?",
+    ).run(CITY_CENTRE.lat, CITY_CENTRE.lng, CITY.id);
+
+    const updateHood = db.prepare("UPDATE neighborhoods SET lat = ?, lng = ? WHERE city_id = ? AND name = ?");
+    for (const [hood, coords] of Object.entries(HOOD_COORDS)) {
+      updateHood.run(coords.lat, coords.lng, CITY.id, hood);
+    }
+
+    // Seeded leagues keep their hand-drawn atlas position. The projection is
+    // linear, so the real coordinate lands on exactly the same pin.
+    const updateLeague = db.prepare("UPDATE leagues SET lat = ?, lng = ? WHERE id = ?");
+    for (const league of LEAGUES) {
+      const coords = hoodCoords(league.hood);
+      if (coords) updateLeague.run(coords.lat, coords.lng, league.id);
+    }
+
+    const chapters = db
+      .prepare(
+        `UPDATE chapters
+            SET lat = (SELECT n.lat FROM neighborhoods n WHERE n.id = chapters.neighborhood_id),
+                lng = (SELECT n.lng FROM neighborhoods n WHERE n.id = chapters.neighborhood_id)
+          WHERE EXISTS (
+            SELECT 1 FROM neighborhoods n
+             WHERE n.id = chapters.neighborhood_id AND n.lat IS NOT NULL AND n.lng IS NOT NULL
+          )`,
+      )
+      .run();
+
+    return { indexed: rebuildLeagueSearch(db), chapters: Number(chapters.changes) };
   });
 }

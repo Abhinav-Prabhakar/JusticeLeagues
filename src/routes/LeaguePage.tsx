@@ -5,6 +5,7 @@ import {
   Compass,
   LayoutGrid,
   MapPin,
+  Printer,
   Settings2,
   ShieldCheck,
   Sparkles,
@@ -13,13 +14,14 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
-import { CAUSES, fmt } from "../data";
+import { CAUSES, fmt, photo } from "../data";
 import { activeMembership } from "../lib/api";
 import { useEdition } from "../lib/queries";
 import { usePageTitle } from "../lib/usePageTitle";
 import { Emblem, Photo } from "../ui";
 import { cn } from "../utils/cn";
 import { NotFound } from "./NotFound";
+import { ShareButton } from "../components/ShareButton";
 import type { LeagueContextValue } from "./league/context";
 
 const TABS = [
@@ -42,7 +44,16 @@ export default function LeaguePage() {
   const membership = activeMembership(data.me, id ?? "");
   const isSteward = membership?.role === "owner" || membership?.role === "steward";
   const l = data.leagues.find((x) => x.id === id);
-  usePageTitle(l ? `${l.name} — The Justice Leagues` : "League not found — The Justice Leagues");
+  usePageTitle(
+    l ? `${l.name} — The Justice Leagues` : "League not found — The Justice Leagues",
+    l
+      ? {
+          description: `${l.name}: ${fmt(l.points)} Justice Points, ${fmt(l.members)} members and ${l.chapters.length} neighbourhood chapters in Millbrook. “${l.motto}”`,
+          image: new URL(photo(l.photo), window.location.origin).toString(),
+          path: `/leagues/${l.id}`,
+        }
+      : { path: "/leagues" },
+  );
 
   // Keep the active tab in view on narrow screens without moving the page.
   useEffect(() => {
@@ -66,17 +77,24 @@ export default function LeaguePage() {
 
   return (
     <div className="pt-8 pb-10 md:pt-10">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
         <Link
           to="/leagues"
           className="kicker text-ink-2 hover:text-vermilion flex items-center gap-1.5 transition-colors"
         >
           <Compass size={12} /> The Atlas
         </Link>
-        <span className="bg-ink h-px flex-1" />
-        <span className="kicker flex items-center gap-1.5" style={{ color }}>
+        <span className="bg-ink hidden h-px flex-1 sm:block" />
+        <span className="kicker flex items-center gap-1.5 sm:ml-auto" style={{ color }}>
           <c.icon size={12} /> {c.label} League
         </span>
+        <ShareButton />
+        <Link
+          to={`/leagues/${l.id}/print`}
+          className="border-ink bg-paper hover:bg-mustard inline-flex items-center gap-1.5 border-2 px-2.5 py-1 font-sans text-[9px] font-extrabold tracking-wider uppercase transition-colors"
+        >
+          <Printer size={12} /> Print
+        </Link>
       </div>
 
       <div className="grid items-end gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">

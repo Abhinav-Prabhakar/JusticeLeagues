@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { CalendarDays, MapPin, Sparkles, Users } from "lucide-react";
 import { CAUSES, fmt } from "../../data";
 import { activeMembership } from "../../lib/api";
@@ -81,6 +82,12 @@ export default function LeagueChapters() {
                     <CalendarDays size={11} /> {chapterShifts} {chapterShifts === 1 ? "shift" : "shifts"}
                   </div>
                 </div>
+                <Link
+                  to={`/leagues/${l.id}/chapters/${chapter.id}`}
+                  className="kicker mt-3 inline-flex items-center gap-1 underline underline-offset-4 hover:text-vermilion"
+                >
+                  Open the {chapter.hood} chapter
+                </Link>
               </div>
             </article>
           );

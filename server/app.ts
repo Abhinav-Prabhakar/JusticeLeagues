@@ -49,6 +49,7 @@ import {
   updateShift,
 } from "./db/repository";
 import { listStandings } from "./db/standings";
+import { searchLeagues } from "./db/search";
 import { getImpact } from "./db/impact";
 import { listPublicLedger } from "./db/ledger";
 import { newId } from "./db";
@@ -115,6 +116,15 @@ const standingsSchema = z.object({
   league: z.string().trim().max(80).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+});
+
+const searchSchema = z.object({
+  q: z.string().trim().max(80).default(""),
+  cause: z.enum([...CAUSE_VALUES, "all"]).default("all"),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  radiusKm: z.coerce.number().min(0.1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
 const ledgerQuerySchema = z.object({
@@ -219,14 +229,37 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
   );
 
   app.get("/api/city", (c) => {
-    const city = db.prepare("SELECT id, name, slug FROM cities ORDER BY name LIMIT 1").get() as
-      { id: string; name: string; slug: string } | undefined;
-    const neighborhoods = db.prepare("SELECT id, name, slug FROM neighborhoods ORDER BY name").all() as unknown as {
+    const city = db
+      .prepare("SELECT id, name, slug, center_lat AS lat, center_lng AS lng FROM cities ORDER BY name LIMIT 1")
+      .get() as { id: string; name: string; slug: string; lat: number | null; lng: number | null } | undefined;
+    const neighborhoods = db.prepare("SELECT id, name, slug, lat, lng FROM neighborhoods ORDER BY name").all() as unknown as {
       id: string;
       name: string;
       slug: string;
+      lat: number | null;
+      lng: number | null;
     }[];
     return c.json({ city: city ?? null, neighborhoods });
+  });
+
+  app.get("/api/search", (c) => {
+    const parsed = searchSchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: "Check the search filters.", code: "invalid_query" }, 400);
+    }
+    const { q, cause, lat, lng, radiusKm, limit } = parsed.data;
+    if ((lat === undefined) !== (lng === undefined)) {
+      return c.json({ error: "Send both coordinates or neither.", code: "invalid_coordinates" }, 400);
+    }
+    return c.json(
+      searchLeagues(db, {
+        q,
+        cause: cause as Cause | "all",
+        origin: lat !== undefined && lng !== undefined ? { lat, lng } : null,
+        radiusKm: radiusKm ?? null,
+        limit,
+      }),
+    );
   });
 
   app.get("/api/edition", (c) => c.json(getEdition(db, c.get("profile")?.id ?? null)));

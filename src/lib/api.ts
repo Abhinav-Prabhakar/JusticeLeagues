@@ -8,12 +8,14 @@ import type {
   MeDTO,
   MembershipDTO,
   PublicLedgerDTO,
+  SearchDTO,
   ShiftDTO,
   StandingsDTO,
   StandingsScope,
 } from "./types";
 import { LEAGUES, SHIFTS, WINS, type Cause } from "../data/fixtures";
 import { demoChapters, demoMembers, demoResources } from "../data/demo";
+import { CITY_CENTRE, distanceKm, hoodCoords } from "../data/geo";
 
 /**
  * The GitHub Pages build is a read-only newspaper: no API, no accounts.
@@ -54,11 +56,16 @@ export const isUnauthenticated = (error: unknown) =>
 
 /** The edition before the server answers, so the page never flashes empty. */
 export function initialEdition(): EditionDTO {
-  const leagues: LeagueDTO[] = LEAGUES.map((league) => ({
-    ...league,
-    slug: league.id,
-    chapters: demoChapters(league),
-  }));
+  const leagues: LeagueDTO[] = LEAGUES.map((league) => {
+    const coords = hoodCoords(league.hood) ?? CITY_CENTRE;
+    return {
+      ...league,
+      slug: league.id,
+      lat: coords.lat,
+      lng: coords.lng,
+      chapters: demoChapters(league),
+    };
+  });
 
   const shifts: ShiftDTO[] = SHIFTS.map((shift) => {
     const monday = new Date();
@@ -89,6 +96,80 @@ export function staticLeagueDetail(leagueId: string): StaticLeagueDetail {
   const league = leagues.find((item) => item.id === leagueId) ?? leagues[0];
   const fixture = LEAGUES.find((item) => item.id === league.id)!;
   return { league, members: demoMembers(fixture) };
+}
+
+function searchTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 2 && token.length <= 40)
+    .slice(0, 8);
+}
+
+/**
+ * Discovery search for the printed edition. It mirrors the server's
+ * semantics — prefix-ish matching, cause and distance filters — without an
+ * API, so the Atlas behaves the same offline.
+ */
+export function staticSearch(options: {
+  q?: string;
+  cause?: Cause | "all";
+  lat?: number | null;
+  lng?: number | null;
+  radiusKm?: number | null;
+  limit?: number;
+}): SearchDTO {
+  const query = (options.q ?? "").trim();
+  const tokens = searchTokens(query);
+  const cause = options.cause ?? "all";
+  const origin =
+    options.lat !== null && options.lat !== undefined && options.lng !== null && options.lng !== undefined
+      ? { lat: options.lat, lng: options.lng }
+      : null;
+  const radiusKm = options.radiusKm ?? null;
+  const limit = options.limit ?? 20;
+
+  let leagues = initialEdition().leagues;
+  if (cause !== "all") leagues = leagues.filter((league) => league.cause === cause);
+
+  const scored = leagues
+    .map((league) => {
+      const haystack = `${league.name} ${league.hood} ${league.cause} ${league.motto}`.toLowerCase();
+      const score = tokens.reduce((total, token) => {
+        if (league.name.toLowerCase().startsWith(token)) return total;
+        return total + (haystack.includes(token) ? 1 : 100);
+      }, 0);
+      return {
+        league,
+        score: tokens.length ? score : 0,
+        distanceKm: origin ? distanceKm(origin, { lat: league.lat, lng: league.lng }) : null,
+        matched: tokens.length === 0 || tokens.every((token) => haystack.includes(token)),
+      };
+    })
+    .filter((item) => item.matched)
+    .filter((item) => !origin || radiusKm === null || (item.distanceKm ?? Infinity) <= radiusKm);
+
+  scored.sort((a, b) => {
+    if (tokens.length) {
+      const score = a.score - b.score;
+      if (score !== 0) return score;
+    }
+    if (origin) {
+      const distance = (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity);
+      if (distance !== 0) return distance;
+    }
+    return b.league.points - a.league.points || a.league.id.localeCompare(b.league.id);
+  });
+
+  return {
+    query,
+    results: scored.slice(0, limit).map((item) => ({ ...item.league, distanceKm: item.distanceKm })),
+    total: scored.length,
+    centre: origin,
+    radiusKm,
+  };
 }
 
 export function activeMembership(me: MeDTO | null, leagueId: string): MembershipDTO | undefined {

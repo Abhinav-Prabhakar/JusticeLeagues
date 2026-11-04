@@ -1,11 +1,15 @@
 import type { Bring, Cause } from "../data/fixtures";
+import type { LatLng } from "../data/geo";
 
 export interface ChapterDTO {
   id: string;
+  leagueId: string;
   name: string;
   hood: string;
   points: number;
   status: "active" | "dormant";
+  lat: number;
+  lng: number;
 }
 
 export interface LeagueDTO {
@@ -24,8 +28,12 @@ export interface LeagueDTO {
   streak: number;
   hours: number;
   photo: number;
+  /** Atlas percentages, derived from lat/lng. */
   x: number;
   y: number;
+  /** Real position used for distance search. */
+  lat: number;
+  lng: number;
   founded: number;
   recruiting: boolean;
   motto: string;
@@ -256,6 +264,19 @@ export interface StandingsDTO {
   total: number;
   rows: StandingRowDTO[];
   mostImproved: { leagueId: string; leagueName: string; delta: number } | null;
+}
+
+/** A league plus its distance from the search origin, when one was sent. */
+export interface SearchResultDTO extends LeagueDTO {
+  distanceKm: number | null;
+}
+
+export interface SearchDTO {
+  query: string;
+  results: SearchResultDTO[];
+  total: number;
+  centre: LatLng | null;
+  radiusKm: number | null;
 }
 
 export interface ImpactChapterDTO {

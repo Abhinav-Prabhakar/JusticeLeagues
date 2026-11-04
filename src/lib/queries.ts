@@ -13,6 +13,7 @@ import type {
   PublicLedgerDTO,
   ResourceDTO,
   ResourceKind,
+  SearchDTO,
   ShiftDTO,
   ShiftRosterDTO,
   StandingsDTO,
@@ -26,6 +27,7 @@ import {
   staticImpact,
   staticLeagueDetail,
   staticPublicLedger,
+  staticSearch,
   staticStandings,
 } from "./api";
 import { useApp } from "../ctx";
@@ -72,7 +74,7 @@ export function useLeagueDetail(leagueId: string) {
     queryKey: ["league", leagueId],
     queryFn: () => api<LeagueDetail>(`/api/leagues/${leagueId}`),
     initialData: STATIC_PREVIEW ? () => staticLeagueDetail(leagueId) : undefined,
-    enabled: !STATIC_PREVIEW,
+    enabled: !STATIC_PREVIEW && Boolean(leagueId),
     staleTime: 20_000,
     retry: 1,
   });
@@ -643,6 +645,36 @@ export function useImpact(leagueId: string | null = null) {
     initialData: STATIC_PREVIEW ? () => staticImpact(leagueId) : undefined,
     enabled: !STATIC_PREVIEW,
     staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export interface SearchInput {
+  q?: string;
+  cause?: Cause | "all";
+  lat?: number | null;
+  lng?: number | null;
+  radiusKm?: number | null;
+  limit?: number;
+}
+
+/** Server-driven Atlas search; the printed edition uses the same rules offline. */
+export function useSearch({ q = "", cause = "all", lat = null, lng = null, radiusKm = null, limit = 20 }: SearchInput = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (q.trim()) params.set("q", q.trim());
+  if (cause !== "all") params.set("cause", cause);
+  if (lat !== null && lng !== null) {
+    params.set("lat", String(lat));
+    params.set("lng", String(lng));
+  }
+  if (radiusKm !== null) params.set("radiusKm", String(radiusKm));
+
+  return useQuery({
+    queryKey: ["search", q.trim(), cause, lat, lng, radiusKm, limit],
+    queryFn: () => api<SearchDTO>(`/api/search?${params.toString()}`),
+    initialData: STATIC_PREVIEW ? () => staticSearch({ q, cause, lat, lng, radiusKm, limit }) : undefined,
+    enabled: !STATIC_PREVIEW,
+    staleTime: 10_000,
     retry: 1,
   });
 }

@@ -650,3 +650,79 @@ describe("phase 3 API", () => {
     expect(twice.status).toBe(409);
   });
 });
+
+describe("search API", () => {
+  it("lists every league with coordinates and no distance without an origin", async () => {
+    const response = await app.request("/api/search");
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      results: { id: string; lat: number; lng: number; distanceKm: number | null }[];
+      total: number;
+      centre: null;
+      radiusKm: null;
+    };
+    expect(payload.total).toBe(10);
+    expect(payload.results).toHaveLength(10);
+    expect(payload.centre).toBeNull();
+    expect(payload.radiusKm).toBeNull();
+    for (const row of payload.results) {
+      expect(Number.isFinite(row.lat)).toBe(true);
+      expect(Number.isFinite(row.lng)).toBe(true);
+      expect(row.distanceKm).toBeNull();
+    }
+  });
+
+  it("matches text, filters by cause, and stays safe with operators", async () => {
+    const match = (await (await app.request("/api/search?q=harb")).json()) as { results: { id: string }[] };
+    expect(match.results.map((row) => row.id)).toEqual(["harbor"]);
+
+    const cause = (await (await app.request("/api/search?q=green&cause=climate")).json()) as {
+      results: { id: string }[];
+    };
+    expect(cause.results.map((row) => row.id)).toEqual(["greenway"]);
+
+    const injection = await app.request(`/api/search?q=${encodeURIComponent('harbor" OR 1=1 --')}`);
+    expect(injection.status).toBe(200);
+    expect(((await injection.json()) as { results: unknown[] }).results).toEqual([]);
+  });
+
+  it("sorts and filters by distance", async () => {
+    const response = await app.request("/api/search?lat=43.6532&lng=-79.3832&radiusKm=5&limit=50");
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      results: { distanceKm: number }[];
+      total: number;
+      centre: { lat: number; lng: number };
+    };
+    expect(payload.centre).toEqual({ lat: 43.6532, lng: -79.3832 });
+    expect(payload.results.length).toBeGreaterThan(0);
+    expect(payload.results.length).toBeLessThan(10);
+    const distances = payload.results.map((row) => row.distanceKm);
+    expect([...distances].sort((a, b) => a - b)).toEqual(distances);
+    for (const distance of distances) expect(distance).toBeLessThanOrEqual(5);
+  });
+
+  it("rejects half a coordinate pair and out-of-range input", async () => {
+    const half = await app.request("/api/search?lat=43.65");
+    expect(half.status).toBe(400);
+    expect(((await half.json()) as { code: string }).code).toBe("invalid_coordinates");
+
+    expect((await app.request("/api/search?lat=999&lng=-79")).status).toBe(400);
+    expect((await app.request("/api/search?radiusKm=500")).status).toBe(400);
+  });
+
+  it("returns coordinates with the city directory", async () => {
+    const response = await app.request("/api/city");
+    const payload = (await response.json()) as {
+      city: { name: string; lat: number; lng: number };
+      neighborhoods: { name: string; lat: number; lng: number }[];
+    };
+    expect(payload.city.name).toBe("Millbrook");
+    expect(payload.city.lat).toBeCloseTo(43.6532, 4);
+    expect(payload.neighborhoods.length).toBeGreaterThan(0);
+    for (const hood of payload.neighborhoods) {
+      expect(Number.isFinite(hood.lat)).toBe(true);
+      expect(Number.isFinite(hood.lng)).toBe(true);
+    }
+  });
+});

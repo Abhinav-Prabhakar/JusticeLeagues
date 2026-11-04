@@ -20,6 +20,8 @@ const LedgerPage = lazy(() => import("./routes/LedgerPage"));
 const Login = lazy(() => import("./routes/Login"));
 const Register = lazy(() => import("./routes/Register"));
 const JoinInvite = lazy(() => import("./routes/JoinInvite"));
+const ChapterPage = lazy(() => import("./routes/ChapterPage"));
+const PrintLeague = lazy(() => import("./routes/PrintLeague"));
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
         <Route element={<RootLayout />}>
           <Route index element={<Home />} />
           <Route path="leagues" element={<Leagues />} />
+          <Route path="leagues/:id/chapters/:chapterId" element={<ChapterPage />} />
+          <Route path="leagues/:id/print" element={<PrintLeague />} />
           <Route path="ledger" element={<LedgerPage />} />
           <Route path="leagues/:id" element={<LeaguePage />}>
             <Route index element={<LeagueOverview />} />

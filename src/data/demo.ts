@@ -5,6 +5,7 @@
  */
 
 import { LEAGUES, type League } from "./fixtures";
+import { hoodCoords } from "./geo";
 import type { ChapterDTO, LeagueMemberDTO, ResourceDTO } from "../lib/types";
 
 /** Password for every seeded chapter steward. Documented in the README. */
@@ -68,17 +69,21 @@ export function demoChapters(league: League): ChapterDTO[] {
   return [
     {
       id: `ch_${league.id}`,
+      leagueId: league.id,
       name: `${league.hood} chapter`,
       hood: league.hood,
       points: founding,
       status: "active",
+      ...(hoodCoords(league.hood) ?? { lat: 0, lng: 0 }),
     },
     ...others.map((hood, index) => ({
       id: `ch_${league.id}_${index + 2}`,
+      leagueId: league.id,
       name: `${hood} chapter`,
       hood,
       points: shares[index],
       status: "active" as const,
+      ...(hoodCoords(hood) ?? { lat: 0, lng: 0 }),
     })),
   ];
 }

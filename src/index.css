@@ -379,3 +379,39 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The printed league profile: ink on paper, no browser chrome. */
+@media print {
+  .no-print,
+  .skip-link,
+  #top > header,
+  #top > div.sticky,
+  #top > footer {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .print-sheet {
+    border: 0 !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .print-sheet a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+}
+

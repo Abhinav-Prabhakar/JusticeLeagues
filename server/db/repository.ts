@@ -12,6 +12,7 @@ import {
   resolveAnomalyRow,
 } from "./anomalies";
 import { rebuildStandings } from "./standings";
+import { rebuildLeagueSearch } from "./search-index";
 import type {
   AnomalyDTO,
   ChapterDTO,
@@ -37,6 +38,7 @@ import type {
   WinDTO,
 } from "../../src/lib/types";
 import type { Cause } from "../../src/data/fixtures";
+import { CITY_CENTRE, hoodCoords } from "../../src/data/geo";
 import { projectPoints, type ProjectFacts } from "../../src/data/projects";
 
 export const JOIN_POINTS = 25;
@@ -56,6 +58,8 @@ interface LeagueRow {
   photo_id: number;
   atlas_x: number;
   atlas_y: number;
+  lat: number | null;
+  lng: number | null;
   delta: number;
   trend: string;
   base_points: number;
@@ -87,6 +91,10 @@ interface ChapterRow {
   hood: string;
   base_points: number;
   status: "active" | "dormant";
+  lat: number | null;
+  lng: number | null;
+  hood_lat: number | null;
+  hood_lng: number | null;
   ledger_points: number;
 }
 
@@ -194,7 +202,7 @@ export function listLeagues(db: Db): LeagueDTO[] {
 
   const chapters = db
     .prepare(
-      `SELECT c.*, n.name AS hood,
+      `SELECT c.*, n.name AS hood, n.lat AS hood_lat, n.lng AS hood_lng,
         COALESCE(cs.points, (SELECT COALESCE(SUM(p.delta), 0) FROM points_ledger p WHERE p.chapter_id = c.id), 0) AS ledger_points
        FROM chapters c
        JOIN neighborhoods n ON n.id = c.neighborhood_id
@@ -208,10 +216,13 @@ export function listLeagues(db: Db): LeagueDTO[] {
     const list = byLeague.get(chapter.league_id) ?? [];
     list.push({
       id: chapter.id,
+      leagueId: chapter.league_id,
       name: chapter.name,
       hood: chapter.hood,
       points: chapter.ledger_points,
       status: chapter.status,
+      lat: chapter.lat ?? chapter.hood_lat ?? hoodCoords(chapter.hood)?.lat ?? CITY_CENTRE.lat,
+      lng: chapter.lng ?? chapter.hood_lng ?? hoodCoords(chapter.hood)?.lng ?? CITY_CENTRE.lng,
     });
     byLeague.set(chapter.league_id, list);
   }
@@ -219,6 +230,7 @@ export function listLeagues(db: Db): LeagueDTO[] {
   return rows.map((row, index) => {
     const month = Number(row.month_points) || 0;
     const previous = Number(row.prev_month_points) || 0;
+    const coords = hoodCoords(row.hood);
     return {
       id: row.id,
       slug: row.slug,
@@ -237,6 +249,8 @@ export function listLeagues(db: Db): LeagueDTO[] {
       photo: row.photo_id,
       x: row.atlas_x,
       y: row.atlas_y,
+      lat: row.lat ?? coords?.lat ?? CITY_CENTRE.lat,
+      lng: row.lng ?? coords?.lng ?? CITY_CENTRE.lng,
       founded: row.founded_year,
       recruiting: row.recruiting === 1,
       motto: row.motto,
@@ -1622,6 +1636,7 @@ export function updateLeagueSettings(
     );
 
     rebuildStandings(db);
+    rebuildLeagueSearch(db);
     audit(db, {
       leagueId,
       actorId,
