@@ -69,6 +69,10 @@ test("a full shift takes a waitlist and promotes the first in line", async ({ br
     const shift = edition.shifts.find((item) => item.id === "s12")!;
     expect(shift).toMatchObject({ filled: 20, waitlist: 0 });
   } finally {
+    // Leave s12 at its seeded 17/20 so a retry starts from the same place.
+    for (const context of [waiterContext, ...fillers]) {
+      await context.request.delete("/api/shifts/s12/signup").catch(() => undefined);
+    }
     for (const context of fillers) await context.close();
     await waiterContext.close();
   }
@@ -113,6 +117,18 @@ test("a steward renames the league, removes a member, and archives", async ({ br
     await steward.getByRole("button", { name: /confirm archive/i }).click();
     await expect(steward).toHaveURL(/\/leagues$/);
     await expect(steward.getByRole("link", { name: /nightlights neighbourhood watch/i })).toHaveCount(0);
+
+    // Restore the seeded league so a retry starts from the same place.
+    const restored = await stewardContext.request.patch("/api/leagues/nightlights/settings", {
+      data: {
+        name: "Night Lights Patrol",
+        motto: "Light every corner.",
+        cause: "safety",
+        recruiting: true,
+        archived: false,
+      },
+    });
+    expect(restored.ok(), await restored.text()).toBeTruthy();
   } finally {
     await memberContext.close();
     await stewardContext.close();
