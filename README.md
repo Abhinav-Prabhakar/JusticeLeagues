@@ -6,7 +6,7 @@
   <a href="https://github.com/Abhinav-Prabhakar/justice-leagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/justice-leagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
   <a href="https://github.com/Abhinav-Prabhakar/justice-leagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/justice-leagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/justice-leagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-20_unit_%C2%B7_6_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-32_unit_%C2%B7_8_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
@@ -28,7 +28,8 @@
 
 - **Citywide leagues, neighbourhood chapters.** Climate, safety, food, transit, learning, housing, health, rights.
 - **Real shifts, real capacity.** Join a league, claim a shift, survive a refresh. Two accounts see the same filled spots.
-- **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing.
+- **A steward desk, not a form.** Stewards post shifts, cancel them, and record attendance. Hours become points.
+- **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12.
 
 > Points land when a steward checks you in — not when you tap sign up. That distinction is the whole leaderboard.
 
@@ -36,7 +37,11 @@
 
 <table>
   <tr>
-    <td width="50%"><a href="docs/screenshots/league.webp"><img src="docs/screenshots/league.webp" alt="League page with standing, chapters, and open shifts" /></a><br/><sub><b>League page</b> · standing, tier, chapters, open shifts</sub></td>
+    <td width="50%"><a href="docs/screenshots/league.webp"><img src="docs/screenshots/league.webp" alt="League page with tabs, standing, chapters, and open shifts" /></a><br/><sub><b>League page</b> · tabs, standing, and the next shift</sub></td>
+    <td width="50%"><a href="docs/screenshots/steward.webp"><img src="docs/screenshots/steward.webp" alt="Steward desk with a checked-in volunteer and an awarded ledger entry" /></a><br/><sub><b>Steward desk</b> · post a shift, record hours, mint nothing by hand</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/chapters.webp"><img src="docs/screenshots/chapters.webp" alt="Neighbourhood chapter cards with points, members, and shifts" /></a><br/><sub><b>Chapters</b> · every point rolls up to the citywide league</sub></td>
     <td width="50%"><a href="docs/screenshots/dashboard.webp"><img src="docs/screenshots/dashboard.webp" alt="Personal desk with points, roster, and ledger" /></a><br/><sub><b>Your desk</b> · points, roster, and the ledger</sub></td>
   </tr>
   <tr>
@@ -89,13 +94,25 @@ npm run db:seed    # migrate + seed if empty
 npm run db:reset   # throw the paper away and rebuild it
 ```
 
+### Demo stewards
+
+A fresh seed gives every chapter a steward. The founding chapter's steward owns the league. They all use the password `millbrook`:
+
+```text
+steward.harbor.1@justiceleagues.local   # owner, Mill River Docks
+steward.harbor.2@justiceleagues.local   # steward, City Centre
+steward.harbor.3@justiceleagues.local   # steward, Eastside
+```
+
+Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`3` for a chapter. These are local demo accounts — nothing leaves the machine.
+
 ## Checks
 
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 20 unit + API integration tests
-npm run test:e2e   # 6 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 32 unit + API integration tests
+npm run test:e2e   # 8 Playwright tests, isolated :8788 / :5174 / data/e2e.db
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

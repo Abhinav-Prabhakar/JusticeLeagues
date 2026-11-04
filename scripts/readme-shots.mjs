@@ -6,7 +6,8 @@
  *   BASE_URL=http://localhost:5176 npm run shots:readme
  *
  * The script creates its own account, joins a league, claims a shift, and
- * writes desktop + mobile screenshots into docs/screenshots/.
+ * writes desktop + mobile screenshots into docs/screenshots/. It then signs in
+ * as a seeded chapter steward, records one attendance, and captures the desk.
  */
 import { mkdir } from "node:fs/promises";
 import { chromium } from "@playwright/test";
@@ -71,6 +72,9 @@ await shift.getByRole("button", { name: /^you're in$/i }).waitFor();
 await page.goto(`${base}/leagues/harbor`);
 await shoot(page, "league", true);
 
+await page.goto(`${base}/leagues/harbor/chapters`);
+await shoot(page, "chapters", true);
+
 await page.goto(base);
 await shoot(page, "home", false);
 
@@ -79,6 +83,22 @@ await shoot(page, "leagues", true);
 
 await page.goto(`${base}/dashboard`);
 await shoot(page, "dashboard", true);
+
+// The seeded steward records Ada's attendance, then the desk is captured.
+const stewardContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+const steward = await stewardContext.newPage();
+await steward.goto(`${base}/login`);
+await steward.getByLabel("Email", { exact: true }).fill("steward.harbor.1@justiceleagues.local");
+await steward.getByLabel("Password", { exact: true }).fill("millbrook");
+await steward.getByRole("button", { name: /^sign in$/i }).click();
+await steward.waitForURL(/\/dashboard$/);
+await steward.goto(`${base}/leagues/harbor/steward`);
+const attendance = steward.locator("li").filter({ hasText: "Ada Lovelace" });
+await attendance.getByRole("button", { name: /mark ada lovelace attended/i }).click();
+await attendance.getByText("24 JP").waitFor();
+await steward.waitForTimeout(3200);
+await shoot(steward, "steward", true);
+await stewardContext.close();
 
 // Mobile viewports.
 const mobile = await browser.newContext({

@@ -1,8 +1,9 @@
 # Justice Leagues — Prototype → Production Plan
 
-Status: **prototype**. The front page is a convincing editorial shell; almost
-everything below it is local state and fixture data. This document is the path
-to a real, multi-user, money-safe-ish civic product.
+Status: **Phase 2 in progress**. The SQLite substrate, local auth, persisted
+signups, neighbourhood chapters, the tabbed league shell, steward check-in, and
+steward shift authoring are real. Resources, project approval, invitations, and
+the standings cache remain.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -216,7 +217,7 @@ production build offline.
 - Typed API client (`src/lib/api`) + TanStack Query; Zod request schemas. ✅
 - Repository-level authorization: every mutation requires a session and
   membership is checked before league/shift writes. Steward/owner role
-  assertions land with the Phase 2 tools that grant those roles.
+  assertions now guard check-in, rosters, and shift authoring. ✅
 - Persisted join/leave and shift signup with optimistic updates and rollback. ✅
 - Vendor fonts and seed images into `public/` for offline use. ✅
 - E2E isolation: Playwright runs its own API, ports and `data/e2e.db`; specs
@@ -236,13 +237,16 @@ The core product. A real route, not a drawer.
 
 - `LeagueShell`: league masthead, cause emblem, role badge, chapter switcher,
   tab nav (Overview · Shifts · Chapters · Members · Resources · Impact · Settings).
+  ✅ Overview · Shifts · Chapters · Members · Impact · Steward (role-gated).
 - Chapter model in the UI: a citywide league rolls up N neighbourhood chapters;
-  every shift, resource, and project is filed under a chapter.
-- Overview: next shift, fill rate, active members, points sparkline, recent win.
+  every shift, resource, and project is filed under a chapter. ✅
+- Overview: next shift, fill rate, active members, points sparkline, recent win. ✅
 - Shifts: create/edit/cancel; capacity + waitlist; signup; steward check-in;
-  attendance → hours → points.
+  attendance → hours → points. ✅ create/cancel, capacity, signup, check-in,
+  hours → points; waitlist and edit still open.
 - Members: roster, roles (owner/steward/member), chapter assignment, invite by
-  local link token, remove.
+  local link token, remove. ✅ roster, roles, home-chapter assignment; invites
+  and removal still open.
 - Resources: post offer/want, claim, fulfil, expire; photo optional.
 - Projects/Wins: submit with metrics + evidence; steward approve/reject;
   approval triggers points and a public win card.
@@ -380,8 +384,12 @@ rollback plan.
 7. Write migrations for profiles/cities/neighbourhoods/leagues/chapters/shifts. ✅
 8. Seed from the fixtures; swap the home page to read from the database. ✅
 9. Build local auth + onboarding. ✅
-10. Ship league Overview + Shifts with persisted signup → check-in → points.
-    Persisted signup ✅; check-in and steward-awarded points are Phase 2.
+10. Ship league Overview + Shifts with persisted signup → check-in → points. ✅
+11. Give every league three neighbourhood chapters; file joins under a home
+    chapter. ✅
+12. Replace the single league page with a tabbed shell and a public roster. ✅
+13. Add steward check-in (hours → ledger) and steward-authored shifts. ✅
+14. Next: resources, project approval, chapter invites, standings cache.
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded.
