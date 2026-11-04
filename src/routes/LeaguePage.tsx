@@ -7,6 +7,7 @@ import {
   MapPin,
   ShieldCheck,
   Sparkles,
+  Tag,
   Trophy,
   UserCheck,
   Users,
@@ -25,6 +26,7 @@ const TABS = [
   { to: "shifts", label: "Shifts", icon: CalendarDays, end: false },
   { to: "chapters", label: "Chapters", icon: MapPin, end: false },
   { to: "members", label: "Members", icon: Users, end: false },
+  { to: "resources", label: "Resources", icon: Tag, end: false },
   { to: "impact", label: "Impact", icon: Sparkles, end: false },
 ];
 

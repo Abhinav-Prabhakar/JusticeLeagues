@@ -296,3 +296,67 @@ describe("project API", () => {
     expect(badEvidence.status).toBe(400);
   });
 });
+
+describe("resource API", () => {
+  const draft = {
+    chapterId: "ch_harbor_2",
+    kind: "offer",
+    title: "Ladder and a set of hand tools",
+    description: "Borrow for a build day; return swept.",
+    quantity: "1 ladder · 12 tools",
+  };
+
+  async function member(email: string, name: string) {
+    const account = await register(email, name);
+    const joined = await app.request("/api/leagues/harbor/join", {
+      method: "POST",
+      headers: { cookie: account.cookie },
+    });
+    expect(joined.status).toBe(200);
+    return account;
+  }
+
+  it("posts, claims, releases, and fulfils a classified", async () => {
+    const lender = await member("lender@example.com", "Lender One");
+    const borrower = await member("borrower@example.com", "Borrower Two");
+
+    const posted = await post("/api/leagues/harbor/resources", draft, lender.cookie);
+    expect(posted.status).toBe(201);
+    const resource = (await posted.json()) as { id: string; status: string; kind: string };
+    expect(resource).toMatchObject({ status: "open", kind: "offer" });
+
+    const ownClaim = await post(`/api/resources/${resource.id}/claim`, {}, lender.cookie);
+    expect(ownClaim.status).toBe(409);
+
+    const claim = await post(`/api/resources/${resource.id}/claim`, {}, borrower.cookie);
+    expect(claim.status).toBe(200);
+    expect(((await claim.json()) as { status: string }).status).toBe("claimed");
+
+    const edition = (await (await app.request("/api/edition")).json()) as {
+      resources: { id: string; status: string }[];
+    };
+    expect(edition.resources.find((item) => item.id === resource.id)?.status).toBe("claimed");
+
+    const release = await post(`/api/resources/${resource.id}/release`, {}, borrower.cookie);
+    expect(((await release.json()) as { status: string }).status).toBe("open");
+
+    await post(`/api/resources/${resource.id}/claim`, {}, borrower.cookie);
+    const fulfilled = await post(`/api/resources/${resource.id}/fulfil`, {}, lender.cookie);
+    expect(((await fulfilled.json()) as { status: string }).status).toBe("fulfilled");
+  });
+
+  it("refuses outsiders and malformed classifieds", async () => {
+    const lender = await member("lender2@example.com", "Lender Two");
+    const outsider = await register("outsider2@example.com", "Outside Two");
+
+    const posted = await post("/api/leagues/harbor/resources", draft, lender.cookie);
+    const resource = (await posted.json()) as { id: string };
+
+    const denied = await post(`/api/resources/${resource.id}/claim`, {}, outsider.cookie);
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as { code: string }).code).toBe("not_member");
+
+    const invalid = await post("/api/leagues/harbor/resources", { ...draft, kind: "sale" }, lender.cookie);
+    expect(invalid.status).toBe(400);
+  });
+});

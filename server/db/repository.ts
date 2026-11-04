@@ -10,6 +10,9 @@ import type {
   MembershipDTO,
   ProjectDTO,
   ProjectStatus,
+  ResourceDTO,
+  ResourceKind,
+  ResourceStatus,
   ShiftDTO,
   ShiftRosterDTO,
   ShiftRosterEntryDTO,
@@ -332,6 +335,7 @@ export function getEdition(db: Db, profileId: string | null): EditionDTO {
     leagues: listLeagues(db),
     shifts: listShifts(db),
     wins: listWins(db),
+    resources: listResources(db),
     me: profileId ? getMe(db, profileId) : null,
   };
 }
@@ -924,5 +928,223 @@ export function reviewProject(db: Db, actorId: string, projectId: string, decisi
     const updated = readProjectRow(db, projectId);
     if (!updated) throw new Error("The reviewed project could not be read back.");
     return projectFromRow(updated);
+  });
+}
+
+interface ResourceRow {
+  id: string;
+  league_id: string;
+  chapter_id: string | null;
+  kind: ResourceKind;
+  title: string;
+  description: string;
+  quantity: string;
+  needed_by: string | null;
+  status: ResourceStatus;
+  created_by: string | null;
+  claimed_by: string | null;
+  created_at: string;
+  creator_handle: string | null;
+  creator_name: string | null;
+  claimer_handle: string | null;
+  claimer_name: string | null;
+}
+
+function resourceFromRow(row: ResourceRow): ResourceDTO {
+  return {
+    id: row.id,
+    league: row.league_id,
+    chapterId: row.chapter_id,
+    kind: row.kind,
+    title: row.title,
+    description: row.description,
+    quantity: row.quantity,
+    neededBy: row.needed_by,
+    status: row.status,
+    createdBy:
+      row.created_by && row.creator_name
+        ? { id: row.created_by, handle: row.creator_handle ?? row.created_by, displayName: row.creator_name }
+        : null,
+    claimedBy:
+      row.claimed_by && row.claimer_name
+        ? { id: row.claimed_by, handle: row.claimer_handle ?? row.claimed_by, displayName: row.claimer_name }
+        : null,
+    createdAt: row.created_at,
+  };
+}
+
+function readResourceRow(db: Db, resourceId: string): ResourceRow | undefined {
+  return db
+    .prepare(
+      `SELECT r.*, c.handle AS creator_handle, c.display_name AS creator_name,
+              k.handle AS claimer_handle, k.display_name AS claimer_name
+         FROM resources r
+         LEFT JOIN profiles c ON c.id = r.created_by
+         LEFT JOIN profiles k ON k.id = r.claimed_by
+        WHERE r.id = ?`,
+    )
+    .get(resourceId) as ResourceRow | undefined;
+}
+
+export function listResources(db: Db, leagueId?: string): ResourceDTO[] {
+  const rows = db
+    .prepare(
+      `SELECT r.*, c.handle AS creator_handle, c.display_name AS creator_name,
+              k.handle AS claimer_handle, k.display_name AS claimer_name
+         FROM resources r
+         LEFT JOIN profiles c ON c.id = r.created_by
+         LEFT JOIN profiles k ON k.id = r.claimed_by
+        ${leagueId ? "WHERE r.league_id = ?" : ""}
+        ORDER BY CASE r.status
+                   WHEN 'open' THEN 0
+                   WHEN 'claimed' THEN 1
+                   WHEN 'fulfilled' THEN 2
+                   ELSE 3
+                 END,
+                 r.created_at DESC`,
+    )
+    .all(...(leagueId ? [leagueId] : [])) as unknown as ResourceRow[];
+  return rows.map(resourceFromRow);
+}
+
+export interface CreateResourceInput {
+  chapterId: string;
+  kind: ResourceKind;
+  title: string;
+  description?: string;
+  quantity?: string;
+  neededBy?: string;
+}
+
+export function createResource(db: Db, actorId: string, leagueId: string, input: CreateResourceInput): ResourceDTO {
+  return transaction(db, () => {
+    assertMember(db, actorId, leagueId);
+
+    const chapter = db
+      .prepare("SELECT id FROM chapters WHERE id = ? AND league_id = ?")
+      .get(input.chapterId, leagueId) as { id: string } | undefined;
+    if (!chapter) throw new AppError(400, "invalid_chapter", "That chapter is not part of this league.");
+
+    const id = newId("res");
+    db.prepare(
+      `INSERT INTO resources (
+         id, league_id, chapter_id, kind, title, description, quantity, needed_by,
+         status, created_by
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+    ).run(
+      id,
+      leagueId,
+      chapter.id,
+      input.kind,
+      input.title,
+      input.description?.trim() ?? "",
+      input.quantity?.trim() ?? "",
+      input.neededBy || null,
+      actorId,
+    );
+
+    const resource = readResourceRow(db, id);
+    if (!resource) throw new Error("The posted resource could not be read back.");
+    return resourceFromRow(resource);
+  });
+}
+
+function resourceContext(db: Db, actorId: string, resourceId: string) {
+  const resource = readResourceRow(db, resourceId);
+  if (!resource) throw new AppError(404, "resource_not_found", "That classified is no longer posted.");
+  assertMember(db, actorId, resource.league_id);
+  return resource;
+}
+
+function assertCanHandOff(resource: ResourceRow, actorId: string) {
+  if (resource.created_by !== actorId && resource.claimed_by !== actorId) {
+    throw new AppError(403, "not_your_resource", "Only the member who posted it or the claimant can do that.");
+  }
+}
+
+function setActiveClaimStatus(db: Db, resourceId: string, status: "released" | "fulfilled") {
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE resource_claims SET status = ?, updated_at = ?
+      WHERE resource_id = ? AND status = 'active'`,
+  ).run(status, now, resourceId);
+}
+
+export function claimResource(db: Db, actorId: string, resourceId: string): ResourceDTO {
+  return transaction(db, () => {
+    const resource = resourceContext(db, actorId, resourceId);
+    if (resource.status !== "open") {
+      throw new AppError(409, "resource_unavailable", "That classified is no longer open.");
+    }
+    if (resource.created_by === actorId) {
+      throw new AppError(409, "own_resource", "You cannot claim your own listing.");
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE resources SET status = 'claimed', claimed_by = ?, updated_at = ? WHERE id = ?`).run(
+      actorId,
+      now,
+      resourceId,
+    );
+    db.prepare(
+      `INSERT INTO resource_claims (id, resource_id, profile_id, status, created_at, updated_at)
+       VALUES (?, ?, ?, 'active', ?, ?)`,
+    ).run(newId("clm"), resourceId, actorId, now, now);
+
+    return resourceFromRow(readResourceRow(db, resourceId)!);
+  });
+}
+
+export function releaseResource(db: Db, actorId: string, resourceId: string): ResourceDTO {
+  return transaction(db, () => {
+    const resource = resourceContext(db, actorId, resourceId);
+    assertCanHandOff(resource, actorId);
+    if (resource.status !== "claimed") {
+      throw new AppError(409, "not_claimed", "That classified is not claimed.");
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE resources SET status = 'open', claimed_by = NULL, updated_at = ? WHERE id = ?`).run(
+      now,
+      resourceId,
+    );
+    setActiveClaimStatus(db, resourceId, "released");
+
+    return resourceFromRow(readResourceRow(db, resourceId)!);
+  });
+}
+
+export function fulfilResource(db: Db, actorId: string, resourceId: string): ResourceDTO {
+  return transaction(db, () => {
+    const resource = resourceContext(db, actorId, resourceId);
+    assertCanHandOff(resource, actorId);
+    if (resource.status !== "open" && resource.status !== "claimed") {
+      throw new AppError(409, "resource_closed", "That classified is already closed.");
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE resources SET status = 'fulfilled', updated_at = ? WHERE id = ?`).run(now, resourceId);
+    setActiveClaimStatus(db, resourceId, "fulfilled");
+
+    return resourceFromRow(readResourceRow(db, resourceId)!);
+  });
+}
+
+export function expireResource(db: Db, actorId: string, resourceId: string): ResourceDTO {
+  return transaction(db, () => {
+    const resource = resourceContext(db, actorId, resourceId);
+    if (resource.created_by !== actorId) assertSteward(db, actorId, resource.league_id);
+    if (resource.status !== "open" && resource.status !== "claimed") {
+      throw new AppError(409, "resource_closed", "That classified is already closed.");
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(`UPDATE resources SET status = 'expired', claimed_by = NULL, updated_at = ? WHERE id = ?`).run(
+      now,
+      resourceId,
+    );
+    setActiveClaimStatus(db, resourceId, "released");
+
+    return resourceFromRow(readResourceRow(db, resourceId)!);
   });
 }

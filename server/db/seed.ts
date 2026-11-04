@@ -1,5 +1,12 @@
 import { LEAGUES, SHIFTS, WINS } from "../../src/data/fixtures";
-import { DEMO_PASSWORD, demoChapters, demoMembers, demoStewardEmail, slugify } from "../../src/data/demo";
+import {
+  DEMO_PASSWORD,
+  demoChapters,
+  demoMembers,
+  demoResources,
+  demoStewardEmail,
+  slugify,
+} from "../../src/data/demo";
 import { hashPassword } from "../auth/password";
 import { transaction, type Db } from "./index";
 import { shiftStart } from "./schedule";
@@ -109,8 +116,33 @@ export function seedIfEmpty(db: Db): boolean {
       }
     }
 
-    const insertShift = db.prepare(`
-      INSERT INTO shifts (
+    // A pair of open classifieds per league, shared with the static edition.
+    const insertResource = db.prepare(`
+      INSERT INTO resources (
+        id, league_id, chapter_id, kind, title, description, quantity, needed_by,
+        status, created_by, claimed_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const league of LEAGUES) {
+      for (const resource of demoResources(league)) {
+        insertResource.run(
+          resource.id,
+          resource.league,
+          resource.chapterId,
+          resource.kind,
+          resource.title,
+          resource.description,
+          resource.quantity,
+          resource.neededBy,
+          resource.status,
+          resource.createdBy?.id ?? null,
+          null,
+          resource.createdAt,
+        );
+      }
+    }
+
+    const insertShift = db.prepare(`      INSERT INTO shifts (
         id, league_id, chapter_id, title, day, starts_at, duration, place_name,
         capacity, base_filled, bring, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')

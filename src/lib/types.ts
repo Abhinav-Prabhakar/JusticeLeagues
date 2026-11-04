@@ -62,6 +62,24 @@ export interface WinDTO {
 
 export type ProjectStatus = "submitted" | "approved" | "rejected";
 
+export type ResourceKind = "offer" | "want";
+export type ResourceStatus = "open" | "claimed" | "fulfilled" | "expired";
+
+export interface ResourceDTO {
+  id: string;
+  league: string;
+  chapterId: string | null;
+  kind: ResourceKind;
+  title: string;
+  description: string;
+  quantity: string;
+  neededBy: string | null;
+  status: ResourceStatus;
+  createdBy: PublicProfileDTO | null;
+  claimedBy: PublicProfileDTO | null;
+  createdAt: string;
+}
+
 export interface ProjectDTO {
   id: string;
   league: string;
@@ -128,6 +146,7 @@ export interface EditionDTO {
   leagues: LeagueDTO[];
   shifts: ShiftDTO[];
   wins: WinDTO[];
+  resources: ResourceDTO[];
   me: MeDTO | null;
 }
 

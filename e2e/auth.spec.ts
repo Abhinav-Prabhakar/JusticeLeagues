@@ -211,3 +211,57 @@ test("a filed project becomes a public win only after steward approval", async (
     await stewardContext.close();
   }
 });
+
+test("a classified is posted, claimed by a neighbour, and closed", async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL!;
+  const lenderContext = await browser.newContext({ baseURL });
+  const borrowerContext = await browser.newContext({ baseURL });
+
+  try {
+    await registerViaApi(lenderContext, "Lender One", uniqueEmail("lender"));
+    const membership = await lenderContext.request.post("/api/leagues/harbor/join");
+    expect(membership.ok(), await membership.text()).toBeTruthy();
+
+    const lender = await lenderContext.newPage();
+    await lender.goto("/leagues/harbor/resources");
+    await expect(lender.getByRole("heading", { level: 1, name: /harbor cleanup coalition/i })).toBeVisible();
+
+    await lender.getByText("Post an offer or a need").click();
+    await lender.getByRole("button", { name: /i have something to lend/i }).click();
+    await lender.getByLabel("Title", { exact: true }).fill("Extension ladder for the weekend");
+    await lender.getByLabel("Quantity / note").fill("1 ladder · 3.5m");
+    await lender.getByLabel("Details").fill("Collect from the chapter cupboard on Saturday morning.");
+    await lender.getByRole("button", { name: /pin it to the exchange/i }).click();
+    await expect(lender.getByText("Posted to the exchange")).toBeVisible();
+
+    const card = lender.locator("article").filter({ hasText: "Extension ladder for the weekend" });
+    await expect(card).toContainText("Offering");
+
+    await registerViaApi(borrowerContext, "Borrower Two", uniqueEmail("borrower"));
+    const borrowerJoin = await borrowerContext.request.post("/api/leagues/harbor/join");
+    expect(borrowerJoin.ok(), await borrowerJoin.text()).toBeTruthy();
+
+    const borrower = await borrowerContext.newPage();
+    await borrower.goto("/leagues/harbor/resources");
+    const borrowerCard = borrower.locator("article").filter({ hasText: "Extension ladder for the weekend" });
+    await borrowerCard.getByRole("button", { name: /claim this offer/i }).click();
+    await expect(borrower.getByText("Claimed — the poster can see your name")).toBeVisible();
+    await expect(borrowerCard).toContainText("held by @borrower");
+
+    // The claim is server-authored: the poster sees it after a reload.
+    await lender.reload();
+    const claimedCard = lender.locator("article").filter({ hasText: "Extension ladder for the weekend" });
+    await expect(claimedCard).toContainText("held by @borrower");
+    await expect(claimedCard).toContainText("claimed");
+
+    await borrowerCard.getByRole("button", { name: /mark fulfilled/i }).click();
+    await expect(borrower.getByText("Classified marked fulfilled")).toBeVisible();
+    await expect(borrowerCard).toHaveCount(0);
+
+    await borrower.getByRole("button", { name: /show closed \(1\)/i }).click();
+    await expect(borrowerCard).toContainText("fulfilled");
+  } finally {
+    await lenderContext.close();
+    await borrowerContext.close();
+  }
+});

@@ -9,7 +9,11 @@ import {
   cancelShift,
   cancelShiftAsSteward,
   checkInShift,
+  claimResource,
+  createResource,
   createShift,
+  expireResource,
+  fulfilResource,
   getMe,
   getShiftRoster,
   joinLeague,
@@ -17,8 +21,10 @@ import {
   listLeagues,
   listMembers,
   listProjects,
+  listResources,
   listShifts,
   listWins,
+  releaseResource,
   reviewProject,
   signupShift,
   submitProject,
@@ -43,6 +49,7 @@ describe("seed", () => {
   it("imports the edition and is idempotent", () => {
     expect(listLeagues(db)).toHaveLength(10);
     expect(listShifts(db)).toHaveLength(18);
+    expect(listResources(db)).toHaveLength(20);
     expect(seedIfEmpty(db)).toBe(false);
     const harbor = listLeagues(db).find((league) => league.id === "harbor")!;
     expect(harbor.points).toBe(48210);
@@ -371,5 +378,97 @@ describe("project points", () => {
   it("stays within the published floor and cap", () => {
     expect(projectPoints({ people: 0, hours: 0, amount: "" })).toBe(50);
     expect(projectPoints({ people: 5000, hours: 10000, amount: "" })).toBe(500);
+  });
+});
+
+describe("resources", () => {
+  const STEWARD = "usr_seed_harbor_1";
+
+  function join(id: string) {
+    makeProfile(id);
+    joinLeague(db, id, "harbor");
+  }
+
+  function post(actor = "usr_lender", overrides: Partial<Parameters<typeof createResource>[3]> = {}) {
+    return createResource(db, actor, "harbor", {
+      chapterId: "ch_harbor_2",
+      kind: "offer",
+      title: "Ladder and a set of hand tools",
+      description: "Borrow for a build day; return swept.",
+      quantity: "1 ladder · 12 tools",
+      ...overrides,
+    });
+  }
+
+  it("posts, claims once, and fulfils with claim history intact", () => {
+    join("usr_lender");
+    join("usr_borrower");
+
+    const resource = post();
+    expect(resource).toMatchObject({ status: "open", kind: "offer" });
+    expect(resource.createdBy?.id).toBe("usr_lender");
+    expect(listResources(db, "harbor").some((item) => item.id === resource.id)).toBe(true);
+
+    expect(() => claimResource(db, "usr_lender", resource.id)).toThrowError(/own listing/);
+
+    const claimed = claimResource(db, "usr_borrower", resource.id);
+    expect(claimed.status).toBe("claimed");
+    expect(claimed.claimedBy?.id).toBe("usr_borrower");
+    expect(() => claimResource(db, "usr_borrower", resource.id)).toThrowError(/no longer open/);
+
+    const fulfilled = fulfilResource(db, "usr_borrower", resource.id);
+    expect(fulfilled.status).toBe("fulfilled");
+
+    const claim = db.prepare("SELECT status FROM resource_claims WHERE resource_id = ?").get(resource.id) as {
+      status: string;
+    };
+    expect(claim.status).toBe("fulfilled");
+    expect(() => releaseResource(db, "usr_borrower", resource.id)).toThrowError(/not claimed/);
+  });
+
+  it("releases a claim back onto the shelf", () => {
+    join("usr_lender");
+    join("usr_borrower");
+    const resource = post();
+    claimResource(db, "usr_borrower", resource.id);
+
+    const released = releaseResource(db, "usr_borrower", resource.id);
+    expect(released).toMatchObject({ status: "open", claimedBy: null });
+
+    const claim = db.prepare("SELECT status FROM resource_claims WHERE resource_id = ?").get(resource.id) as {
+      status: string;
+    };
+    expect(claim.status).toBe("released");
+  });
+
+  it("lets the poster or a steward expire a listing", () => {
+    join("usr_lender");
+    join("usr_other");
+    const own = post();
+    expect(expireResource(db, "usr_lender", own.id).status).toBe("expired");
+
+    const other = post("usr_lender", { title: "Six folding tables" });
+    expect(() => expireResource(db, "usr_other", other.id)).toThrowError(/steward/);
+    expect(expireResource(db, STEWARD, other.id).status).toBe("expired");
+  });
+
+  it("refuses non-members, non-owners, and chapters from another league", () => {
+    join("usr_lender");
+    makeProfile("usr_outsider");
+    const resource = post();
+
+    expect(() => claimResource(db, "usr_outsider", resource.id)).toThrowError(/Join the league/);
+    expect(() => releaseResource(db, "usr_outsider", resource.id)).toThrowError(/Join the league/);
+
+    join("usr_neighbour");
+    expect(() => releaseResource(db, "usr_neighbour", resource.id)).toThrowError(/Only the member/);
+
+    expect(() =>
+      createResource(db, "usr_lender", "harbor", {
+        chapterId: "ch_spoke",
+        kind: "want",
+        title: "Wrong chapter",
+      }),
+    ).toThrowError(/chapter/);
   });
 });

@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ProjectDTO, ShiftDTO, ShiftRosterDTO } from "./types";
+import type {
+  EditionDTO,
+  LeagueDTO,
+  LeagueMemberDTO,
+  MeDTO,
+  ProjectDTO,
+  ResourceDTO,
+  ResourceKind,
+  ShiftDTO,
+  ShiftRosterDTO,
+} from "./types";
 import { api, initialEdition, STATIC_PREVIEW, staticLeagueDetail } from "./api";
 import { useApp } from "../ctx";
 
@@ -340,6 +350,61 @@ export function useReviewProject() {
     },
     onError: (error) => toast(error.message),
   });
+}
+
+export interface NewResourceInput {
+  leagueId: string;
+  chapterId: string;
+  kind: ResourceKind;
+  title: string;
+  description?: string;
+  quantity?: string;
+  neededBy?: string;
+}
+
+export function useCreateResource() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ leagueId, ...body }: NewResourceInput) =>
+      api<ResourceDTO>(`/api/leagues/${leagueId}/resources`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      invalidateEdition(client);
+      toast("Posted to the exchange");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+function useResourceAction(action: "claim" | "release" | "fulfil" | "expire", message: string) {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: (resourceId: string) => api<ResourceDTO>(`/api/resources/${resourceId}/${action}`, { method: "POST" }),
+    onSuccess: () => {
+      invalidateEdition(client);
+      toast(message);
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useClaimResource() {
+  return useResourceAction("claim", "Claimed — the poster can see your name");
+}
+
+export function useReleaseResource() {
+  return useResourceAction("release", "Claim released");
+}
+
+export function useFulfilResource() {
+  return useResourceAction("fulfil", "Classified marked fulfilled");
+}
+
+export function useExpireResource() {
+  return useResourceAction("expire", "Classified expired");
 }
 
 interface AuthPayload {

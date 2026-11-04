@@ -1,6 +1,6 @@
 import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, MembershipDTO, ShiftDTO } from "./types";
 import { LEAGUES, SHIFTS, WINS } from "../data/fixtures";
-import { demoChapters, demoMembers } from "../data/demo";
+import { demoChapters, demoMembers, demoResources } from "../data/demo";
 
 /**
  * The GitHub Pages build is a read-only newspaper: no API, no accounts.
@@ -60,7 +60,7 @@ export function initialEdition(): EditionDTO {
     };
   });
 
-  return { leagues, shifts, wins: WINS, me: null };
+  return { leagues, shifts, wins: WINS, resources: LEAGUES.flatMap(demoResources), me: null };
 }
 
 export interface StaticLeagueDetail {

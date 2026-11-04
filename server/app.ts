@@ -21,7 +21,11 @@ import {
   cancelShift,
   cancelShiftAsSteward,
   checkInShift,
+  claimResource,
+  createResource,
   createShift,
+  expireResource,
+  fulfilResource,
   getEdition,
   getMe,
   getShiftRoster,
@@ -30,6 +34,7 @@ import {
   listLeagues,
   listMembers,
   listProjects,
+  releaseResource,
   reviewProject,
   signupShift,
   submitProject,
@@ -87,6 +92,19 @@ const projectSchema = z.object({
 
 const reviewSchema = z.object({
   decision: z.enum(["approve", "reject"]),
+});
+
+const resourceSchema = z.object({
+  chapterId: z.string().trim().min(1).max(80),
+  kind: z.enum(["offer", "want"]),
+  title: z.string().trim().min(3).max(90),
+  description: z.string().trim().max(500).optional(),
+  quantity: z.string().trim().max(60).optional(),
+  neededBy: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.")
+    .optional()
+    .or(z.literal("")),
 });
 
 function slugifyHandle(value: string): string {
@@ -235,6 +253,35 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
       return c.json({ error: "Choose approve or reject.", code: "invalid_input" }, 400);
     }
     return c.json(reviewProject(db, profile.id, c.req.param("id"), parsed.data.decision));
+  });
+
+  app.post("/api/leagues/:id/resources", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = resourceSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the classified details and try again.", code: "invalid_input" }, 400);
+    }
+    return c.json(createResource(db, profile.id, c.req.param("id"), parsed.data), 201);
+  });
+
+  app.post("/api/resources/:id/claim", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(claimResource(db, profile.id, c.req.param("id")));
+  });
+
+  app.post("/api/resources/:id/release", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(releaseResource(db, profile.id, c.req.param("id")));
+  });
+
+  app.post("/api/resources/:id/fulfil", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(fulfilResource(db, profile.id, c.req.param("id")));
+  });
+
+  app.post("/api/resources/:id/expire", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(expireResource(db, profile.id, c.req.param("id")));
   });
 
   app.post("/api/auth/register", async (c) => {

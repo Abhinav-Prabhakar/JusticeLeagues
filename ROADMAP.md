@@ -1,9 +1,9 @@
 # Justice Leagues — Prototype → Production Plan
 
 Status: **Phase 2 in progress**. The SQLite substrate, local auth, persisted
-signups, neighbourhood chapters, the tabbed league shell, steward check-in, and
-steward shift authoring, and project approval are real. Resources, invitations,
-and the standings cache remain.
+signups, neighbourhood chapters, the tabbed league shell, steward check-in,
+steward shift authoring, project approval, and the resource exchange are real.
+Chapter invitations and the standings cache remain.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -237,7 +237,7 @@ The core product. A real route, not a drawer.
 
 - `LeagueShell`: league masthead, cause emblem, role badge, chapter switcher,
   tab nav (Overview · Shifts · Chapters · Members · Resources · Impact · Settings).
-  ✅ Overview · Shifts · Chapters · Members · Impact · Steward (role-gated).
+  ✅ Overview · Shifts · Chapters · Members · Resources · Impact · Steward (role-gated).
 - Chapter model in the UI: a citywide league rolls up N neighbourhood chapters;
   every shift, resource, and project is filed under a chapter. ✅
 - Overview: next shift, fill rate, active members, points sparkline, recent win. ✅
@@ -248,6 +248,8 @@ The core product. A real route, not a drawer.
   local link token, remove. ✅ roster, roles, home-chapter assignment; invites
   and removal still open.
 - Resources: post offer/want, claim, fulfil, expire; photo optional.
+  ✅ post offer/want, claim, release, fulfil, expire, claim history; photos still
+  open.
 - Projects/Wins: submit with metrics + evidence; steward approve/reject;
   approval triggers points and a public win card. ✅ 50–500 JP by metrics;
   rejection mints nothing; chapter rollups include approved projects.
@@ -391,7 +393,7 @@ rollback plan.
 12. Replace the single league page with a tabbed shell and a public roster. ✅
 13. Add steward check-in (hours → ledger) and steward-authored shifts. ✅
 14. Ship project approval with evidence. ✅
-15. Next: resources, chapter invites, standings cache.
+15. Next: chapter invites, standings cache.
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded.

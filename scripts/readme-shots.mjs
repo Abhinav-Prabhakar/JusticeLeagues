@@ -84,6 +84,21 @@ await shoot(page, "leagues", true);
 await page.goto(`${base}/dashboard`);
 await shoot(page, "dashboard", true);
 
+// The exchange: post an offer, then claim a seeded need.
+await page.goto(`${base}/leagues/harbor/resources`);
+await page.getByText("Post an offer or a need").click();
+await page.getByRole("button", { name: /i have something to lend/i }).click();
+await page.getByLabel("Title", { exact: true }).fill("Cargo bike for chapter deliveries");
+await page.getByLabel("Quantity / note").fill("1 bike · weekend loan");
+await page.getByLabel("Details").fill("Two panniers, a lock, and a rack. Collect from the Mill River cupboard.");
+await page.getByRole("button", { name: /pin it to the exchange/i }).click();
+await page.getByText("Posted to the exchange").waitFor();
+const need = page.locator("article").filter({ hasText: "A trailer for hauling cleanup bags" });
+await need.getByRole("button", { name: /^i can help$/i }).click();
+await page.getByText("Claimed — the poster can see your name").waitFor();
+await page.waitForTimeout(2000);
+await shoot(page, "resources", true);
+
 // Ada files a completed project; the steward will review it on the desk.
 await page.goto(`${base}/leagues/harbor/impact`);
 await page.getByText("File a completed project").click();
