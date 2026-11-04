@@ -2,8 +2,8 @@
 
 Status: **Phase 2 in progress**. The SQLite substrate, local auth, persisted
 signups, neighbourhood chapters, the tabbed league shell, steward check-in,
-steward shift authoring, project approval, and the resource exchange are real.
-Chapter invitations and the standings cache remain.
+steward shift authoring, project approval, the resource exchange, and chapter
+invitations are real. Shift waitlists/editing and the standings cache remain.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -245,8 +245,8 @@ The core product. A real route, not a drawer.
   attendance → hours → points. ✅ create/cancel, capacity, signup, check-in,
   hours → points; waitlist and edit still open.
 - Members: roster, roles (owner/steward/member), chapter assignment, invite by
-  local link token, remove. ✅ roster, roles, home-chapter assignment; invites
-  and removal still open.
+  local link token, remove. ✅ roster, roles, home-chapter assignment, and
+  single-use member/steward invites; removal still open.
 - Resources: post offer/want, claim, fulfil, expire; photo optional.
   ✅ post offer/want, claim, release, fulfil, expire, claim history; photos still
   open.
@@ -393,7 +393,7 @@ rollback plan.
 12. Replace the single league page with a tabbed shell and a public roster. ✅
 13. Add steward check-in (hours → ledger) and steward-authored shifts. ✅
 14. Ship project approval with evidence. ✅
-15. Next: chapter invites, standings cache.
+15. Next: shift waitlists/editing, standings cache.
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded.

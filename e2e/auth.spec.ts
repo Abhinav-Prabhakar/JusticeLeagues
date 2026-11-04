@@ -265,3 +265,62 @@ test("a classified is posted, claimed by a neighbour, and closed", async ({ brow
     await borrowerContext.close();
   }
 });
+
+test("a steward's invitation link brings a neighbour onto the roster", async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL!;
+  const stewardContext = await browser.newContext({ baseURL });
+  const guestContext = await browser.newContext({ baseURL });
+
+  try {
+    const steward = await stewardContext.newPage();
+    await steward.goto("/login");
+    await steward.getByLabel("Email", { exact: true }).fill("steward.harbor.1@justiceleagues.local");
+    await steward.getByLabel("Password", { exact: true }).fill("millbrook");
+    await steward.getByRole("button", { name: /^sign in$/i }).click();
+    await expect(steward).toHaveURL(/\/dashboard$/);
+
+    await steward.goto("/leagues/harbor/steward");
+    await steward.getByText("Invite a neighbour").click();
+    await steward.getByLabel("Note (optional)").fill("Bring the Tuesday crew");
+    await steward.getByRole("button", { name: /mint the invitation/i }).click();
+    await expect(steward.getByText("Invitation minted — copy the link now")).toBeVisible();
+
+    const link = await steward.getByLabel("Invitation link").inputValue();
+    expect(link).toContain("/join/");
+
+    const guest = await guestContext.newPage();
+    await guest.goto(link);
+    await expect(guest.getByRole("heading", { level: 1, name: /harbor cleanup coalition/i })).toBeVisible();
+    await expect(guest.getByText("Bring the Tuesday crew")).toBeVisible();
+    await expect(guest.getByRole("link", { name: /open an account first/i })).toBeVisible();
+
+    await guest.getByRole("link", { name: /open an account first/i }).click();
+    await expect(guest).toHaveURL(/\/register\?next=/);
+    await guest.getByLabel("Display name").fill("Nia Invited");
+    await guest.getByLabel("Email", { exact: true }).fill(uniqueEmail("invitee"));
+    await guest.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await guest.getByRole("button", { name: /open account/i }).click();
+
+    await expect(guest).toHaveURL(/\/join\//);
+    await guest.getByRole("button", { name: /accept the seat/i }).click();
+    await expect(guest).toHaveURL(/\/leagues\/harbor$/);
+    await expect(guest.getByRole("link", { name: /your justice points: 25/i })).toBeVisible();
+    await expect(guest.getByRole("button", { name: /^you're in$/i }).first()).toBeVisible();
+
+    await guest.goto("/leagues/harbor/members");
+    await expect(guest.getByText("Nia Invited")).toBeVisible();
+
+    // The link is spent: a second visitor gets the closed state.
+    const secondContext = await browser.newContext({ baseURL });
+    try {
+      const second = await secondContext.newPage();
+      await second.goto(link);
+      await expect(second.getByText("This invitation has already been accepted.")).toBeVisible();
+    } finally {
+      await secondContext.close();
+    }
+  } finally {
+    await stewardContext.close();
+    await guestContext.close();
+  }
+});

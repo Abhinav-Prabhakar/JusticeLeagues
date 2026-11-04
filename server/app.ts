@@ -22,6 +22,7 @@ import {
   cancelShiftAsSteward,
   checkInShift,
   claimResource,
+  createInvite,
   createResource,
   createShift,
   expireResource,
@@ -34,6 +35,8 @@ import {
   listLeagues,
   listMembers,
   listProjects,
+  previewInvite,
+  redeemInvite,
   releaseResource,
   reviewProject,
   signupShift,
@@ -92,6 +95,13 @@ const projectSchema = z.object({
 
 const reviewSchema = z.object({
   decision: z.enum(["approve", "reject"]),
+});
+
+const inviteSchema = z.object({
+  role: z.enum(["member", "steward"]),
+  chapterId: z.string().trim().max(80).optional().or(z.literal("")),
+  note: z.string().trim().max(120).optional(),
+  days: z.number().int().min(1).max(30).optional(),
 });
 
 const resourceSchema = z.object({
@@ -192,6 +202,25 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
   app.delete("/api/leagues/:id/join", auth(), (c) => {
     const profile = c.get("profile")!;
     return c.json(leaveLeague(db, profile.id, c.req.param("id")));
+  });
+
+  app.post("/api/leagues/:id/invites", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = inviteSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the invitation details and try again.", code: "invalid_input" }, 400);
+    }
+    const { chapterId, ...rest } = parsed.data;
+    return c.json(createInvite(db, profile.id, c.req.param("id"), { ...rest, chapterId: chapterId || undefined }), 201);
+  });
+
+  app.get("/api/invites/:token", (c) => {
+    return c.json(previewInvite(db, c.req.param("token")));
+  });
+
+  app.post("/api/invites/:token/redeem", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(redeemInvite(db, profile.id, c.req.param("token")));
   });
 
   app.post("/api/shifts/:id/signup", auth(), (c) => {

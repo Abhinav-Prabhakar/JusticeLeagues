@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CreatedInviteDTO,
   EditionDTO,
+  InvitePreviewDTO,
+  InviteRole,
   LeagueDTO,
   LeagueMemberDTO,
   MeDTO,
@@ -450,4 +453,58 @@ export function useAuth() {
   });
 
   return { register, login, logout };
+}
+
+export function useInvitePreview(token: string | null) {
+  return useQuery({
+    queryKey: ["invite", token],
+    queryFn: () => api<InvitePreviewDTO>(`/api/invites/${token}`),
+    enabled: Boolean(token) && !STATIC_PREVIEW,
+    retry: false,
+  });
+}
+
+export interface CreateInviteInput {
+  leagueId: string;
+  role: InviteRole;
+  chapterId?: string;
+  note?: string;
+  days?: number;
+}
+
+export function useCreateInvite() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ leagueId, ...body }: CreateInviteInput) =>
+      api<CreatedInviteDTO>(`/api/leagues/${leagueId}/invites`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["edition"] });
+      toast("Invitation minted — copy the link now");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useRedeemInvite() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: (token: string) =>
+      api<{ leagueId: string; role: "owner" | "steward" | "member"; awarded: boolean }>(
+        `/api/invites/${token}/redeem`,
+        { method: "POST" },
+      ),
+    onSuccess: (result) => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["invite"] });
+      toast(result.awarded ? "You're in — charter signed" : "You're in", result.awarded ? 25 : undefined);
+    },
+    onError: (error) => toast(error.message),
+  });
 }

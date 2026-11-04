@@ -1,9 +1,29 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, Check, Clock, MapPin, Plus, ShieldCheck, Sparkles, UserRound, Users, X } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  Clock,
+  Copy,
+  Link2,
+  MapPin,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 import { CAUSES, fmt } from "../../data";
 import { activeMembership } from "../../lib/api";
-import { useCancelShiftAsSteward, useCheckIn, useCreateShift, useShiftRoster } from "../../lib/queries";
+import {
+  useCancelShiftAsSteward,
+  useCheckIn,
+  useCreateInvite,
+  useCreateShift,
+  useShiftRoster,
+} from "../../lib/queries";
+import type { CreatedInviteDTO, InviteRole } from "../../lib/types";
 import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
 import { useLeagueContext } from "./context";
@@ -33,7 +53,16 @@ export default function LeagueSteward() {
   const checkIn = useCheckIn();
   const create = useCreateShift();
   const cancelShift = useCancelShiftAsSteward();
+  const createInvite = useCreateInvite();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    role: "member" as InviteRole,
+    chapterId: l.chapters[0]?.id ?? "",
+    note: "",
+    days: 7,
+  });
+  const [minted, setMinted] = useState<CreatedInviteDTO | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
     chapterId: l.chapters[0]?.id ?? "",
     title: "",
@@ -236,6 +265,149 @@ export default function LeagueSteward() {
             <span className="text-ink-3 ml-3 font-mono text-[9px]">Signups open the moment it is posted.</span>
           </div>
         </form>
+      </details>
+
+      <details className="border-ink bg-paper-2 group border-2" onToggle={() => setCopied(false)}>
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <span className="kicker text-ink flex items-center gap-1.5">
+            <Link2 size={13} /> Invite a neighbour
+          </span>
+          <span className="text-ink-3 font-mono text-[10px]">Single-use link · hashed at rest</span>
+        </summary>
+        <div className="border-ink/20 border-t px-4 py-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setMinted(null);
+              setCopied(false);
+              createInvite.mutate(
+                {
+                  leagueId: l.id,
+                  role: inviteForm.role,
+                  chapterId: inviteForm.chapterId || undefined,
+                  note: inviteForm.note || undefined,
+                  days: Number(inviteForm.days),
+                },
+                { onSuccess: (result) => setMinted(result) },
+              );
+            }}
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            <fieldset className="sm:col-span-2 lg:col-span-4">
+              <legend className="kicker text-ink-3 mb-1.5 text-[9px]">What are they joining as?</legend>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "member" as const, label: "A member", icon: UserRound },
+                  { value: "steward" as const, label: "A steward", icon: ShieldCheck },
+                ].map((option) => {
+                  const on = inviteForm.role === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setInviteForm({ ...inviteForm, role: option.value })}
+                      className={cn(
+                        "border-ink flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 font-sans text-[10px] font-extrabold tracking-wider uppercase transition-colors",
+                        on ? "bg-ink text-paper" : "bg-paper hover:bg-paper-3",
+                      )}
+                    >
+                      <option.icon size={12} /> {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <label className="block sm:col-span-2">
+              <span className="kicker text-ink-3 text-[9px]">Home chapter</span>
+              <select
+                value={inviteForm.chapterId}
+                onChange={(event) => setInviteForm({ ...inviteForm, chapterId: event.target.value })}
+                className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+              >
+                {l.chapters.map((chapter) => (
+                  <option key={chapter.id} value={chapter.id}>
+                    {chapter.hood}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="kicker text-ink-3 text-[9px]">Link expires in</span>
+              <select
+                value={inviteForm.days}
+                onChange={(event) => setInviteForm({ ...inviteForm, days: Number(event.target.value) })}
+                className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+              >
+                {[1, 7, 14, 30].map((days) => (
+                  <option key={days} value={days}>
+                    {days === 1 ? "1 day" : `${days} days`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="kicker text-ink-3 text-[9px]">Note (optional)</span>
+              <input
+                maxLength={120}
+                value={inviteForm.note}
+                onChange={(event) => setInviteForm({ ...inviteForm, note: event.target.value })}
+                placeholder="Bring the Tuesday crew"
+                className="border-ink bg-paper mt-1 w-full border-2 px-2.5 py-2 font-sans text-xs"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-span-4">
+              <button
+                type="submit"
+                disabled={createInvite.isPending}
+                className="btn-press border-ink bg-verdant rounded-full border-2 px-5 py-2.5 font-sans text-[10px] font-extrabold tracking-wider uppercase disabled:opacity-40"
+              >
+                {createInvite.isPending ? "Minting…" : "Mint the invitation"}
+              </button>
+              <span className="text-ink-3 font-mono text-[9px]">
+                {inviteForm.role === "steward"
+                  ? "Steward links can post shifts and approve projects."
+                  : "Member links join the roster and can claim shifts."}
+              </span>
+            </div>
+          </form>
+
+          {minted && (
+            <div className="border-ink bg-paper mt-4 border-2 border-dashed px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="kicker text-ink-3 text-[9px]">Copy this now — it is not shown again</span>
+                <span className="text-ink-3 font-mono text-[9px]">
+                  {new Date(minted.preview.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  readOnly
+                  value={`${window.location.origin}${minted.path}`}
+                  onFocus={(event) => event.currentTarget.select()}
+                  aria-label="Invitation link"
+                  className="border-ink bg-paper-2 min-w-0 flex-1 border-2 px-2.5 py-2 font-mono text-[10px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      ?.writeText(`${window.location.origin}${minted.path}`)
+                      .then(() => setCopied(true))
+                      .catch(() => setCopied(false));
+                  }}
+                  className="btn-press border-ink bg-mustard flex items-center gap-1.5 rounded-full border-2 px-3.5 py-2 font-sans text-[9px] font-extrabold tracking-wider uppercase"
+                >
+                  {copied ? <Check size={11} strokeWidth={3} /> : <Copy size={11} />}
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+              </div>
+              <p className="text-ink-3 mt-2 font-mono text-[9px]">
+                {minted.preview.role} · {minted.preview.chapterHood ?? "home chapter"} · single use
+              </p>
+            </div>
+          )}
+        </div>
       </details>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">

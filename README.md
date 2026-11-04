@@ -6,7 +6,7 @@
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-45_unit_%C2%B7_10_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-50_unit_%C2%B7_11_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
@@ -32,6 +32,7 @@
 - **Real shifts, real capacity.** Join a league, claim a shift, survive a refresh. Two accounts see the same filled spots.
 - **A steward desk, not a form.** Stewards post shifts, cancel them, record attendance, and approve the projects that earn points.
 - **A borrow shelf, not a scoreboard.** Neighbours post offers and needs, claim them, hand them back, and close the loop — with no Justice Points attached.
+- **A front door a steward controls.** Mint a single-use invitation link for a member or a steward, filed under a chapter.
 - **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12; an approved project awards 50–500.
 
 > Points land when a steward checks you in — not when you tap sign up. That distinction is the whole leaderboard.
@@ -50,6 +51,9 @@
   <tr>
     <td width="50%"><a href="docs/screenshots/resources.webp"><img src="docs/screenshots/resources.webp" alt="The league exchange with offers, needs, and a claimed classified" /></a><br/><sub><b>The exchange</b> · offers and needs, claimed and closed</sub></td>
     <td width="50%"><a href="docs/screenshots/projects.webp"><img src="docs/screenshots/projects.webp" alt="Steward reviewing a filed project with its metrics and evidence" /></a><br/><sub><b>The review desk</b> · members file the work, stewards approve the points</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="docs/screenshots/invite.webp"><img src="docs/screenshots/invite.webp" alt="A single-use league invitation with the invited chapter and role" /></a><br/><sub><b>The invitation</b> · a single-use link, filed under a chapter</sub></td>
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/leagues.webp"><img src="docs/screenshots/leagues.webp" alt="Every league in the atlas" /></a><br/><sub><b>The Atlas</b> · every league, one editorial index</sub></td>
@@ -134,8 +138,8 @@ Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 45 unit + API integration tests
-npm run test:e2e   # 10 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 50 unit + API integration tests
+npm run test:e2e   # 11 Playwright tests, isolated :8788 / :5174 / data/e2e.db
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

@@ -10,6 +10,7 @@ import {
   cancelShiftAsSteward,
   checkInShift,
   claimResource,
+  createInvite,
   createResource,
   createShift,
   expireResource,
@@ -24,6 +25,8 @@ import {
   listResources,
   listShifts,
   listWins,
+  previewInvite,
+  redeemInvite,
   releaseResource,
   reviewProject,
   signupShift,
@@ -470,5 +473,70 @@ describe("resources", () => {
         title: "Wrong chapter",
       }),
     ).toThrowError(/chapter/);
+  });
+});
+
+describe("invitations", () => {
+  const STEWARD = "usr_seed_harbor_1";
+
+  it("mints a single-use link that files the guest under the invited chapter", () => {
+    makeProfile("usr_guest");
+    const invite = createInvite(db, STEWARD, "harbor", {
+      role: "member",
+      chapterId: "ch_harbor_2",
+      note: "Bring the Tuesday crew",
+      days: 7,
+    });
+
+    expect(invite.path).toBe(`/join/${invite.token}`);
+    const preview = previewInvite(db, invite.token);
+    expect(preview).toMatchObject({
+      leagueId: "harbor",
+      role: "member",
+      chapterId: "ch_harbor_2",
+      note: "Bring the Tuesday crew",
+      status: "open",
+    });
+
+    const redeemed = redeemInvite(db, "usr_guest", invite.token);
+    expect(redeemed).toMatchObject({ leagueId: "harbor", role: "member", awarded: true });
+
+    const me = getMe(db, "usr_guest");
+    const membership = me.memberships.find((item) => item.leagueId === "harbor")!;
+    expect(membership).toMatchObject({ role: "member", status: "active", chapterId: "ch_harbor_2" });
+    expect(me.points).toBe(JOIN_POINTS);
+    expect(previewInvite(db, invite.token).status).toBe("used");
+
+    makeProfile("usr_second");
+    expect(() => redeemInvite(db, "usr_second", invite.token)).toThrowError(/already been used/);
+  });
+
+  it("upgrades a member to steward but never demotes an existing steward", () => {
+    makeProfile("usr_guest");
+    const memberInvite = createInvite(db, STEWARD, "harbor", { role: "member", chapterId: "ch_harbor" });
+    redeemInvite(db, "usr_guest", memberInvite.token);
+
+    const stewardInvite = createInvite(db, STEWARD, "harbor", { role: "steward", chapterId: "ch_harbor" });
+    expect(redeemInvite(db, "usr_guest", stewardInvite.token)).toMatchObject({ role: "steward", awarded: false });
+    expect(getMe(db, "usr_guest").memberships[0].role).toBe("steward");
+
+    const plainInvite = createInvite(db, STEWARD, "harbor", { role: "member", chapterId: "ch_harbor" });
+    expect(redeemInvite(db, "usr_guest", plainInvite.token).role).toBe("steward");
+    expect(getMe(db, "usr_guest").memberships[0].role).toBe("steward");
+  });
+
+  it("expires old links and refuses non-stewards or foreign chapters", () => {
+    makeProfile("usr_guest");
+    const invite = createInvite(db, STEWARD, "harbor", { role: "member", days: 1 });
+    db.prepare("UPDATE league_invites SET expires_at = ?").run(new Date(Date.now() - 1000).toISOString());
+
+    expect(previewInvite(db, invite.token).status).toBe("expired");
+    expect(() => redeemInvite(db, "usr_guest", invite.token)).toThrowError(/expired/);
+
+    joinLeague(db, "usr_guest", "harbor");
+    expect(() => createInvite(db, "usr_guest", "harbor", { role: "member" })).toThrowError(/steward/);
+    expect(() => createInvite(db, STEWARD, "harbor", { role: "member", chapterId: "ch_spoke" })).toThrowError(
+      /chapter/,
+    );
   });
 });

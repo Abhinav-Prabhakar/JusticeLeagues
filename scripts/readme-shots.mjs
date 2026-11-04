@@ -128,6 +128,19 @@ await attendance.getByText("24 JP").waitFor();
 await steward.waitForTimeout(3200);
 await shoot(steward, "steward", true);
 
+// Mint an invitation, then photograph the landing page as a signed-out guest.
+await steward.getByText("Invite a neighbour").click();
+await steward.getByLabel("Note (optional)").fill("You fixed the east walk — come finish the job.");
+await steward.getByRole("button", { name: /mint the invitation/i }).click();
+await steward.getByText("Invitation minted — copy the link now").waitFor();
+const inviteLink = await steward.getByLabel("Invitation link").inputValue();
+
+const guestContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+const guest = await guestContext.newPage();
+await guest.goto(inviteLink);
+await shoot(guest, "invite", false);
+await guestContext.close();
+
 const reviewDesk = steward.locator("section").filter({ hasText: "Filed projects" });
 await reviewDesk.scrollIntoViewIfNeeded();
 await steward.evaluate(() => window.scrollBy(0, -90));

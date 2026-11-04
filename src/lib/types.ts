@@ -119,6 +119,29 @@ export interface MembershipDTO {
   points: number;
 }
 
+export type InviteRole = "member" | "steward";
+export type InviteStatus = "open" | "used" | "expired";
+
+export interface InvitePreviewDTO {
+  leagueId: string;
+  leagueName: string;
+  leagueHood: string;
+  leagueCause: Cause;
+  chapterId: string | null;
+  chapterHood: string | null;
+  role: InviteRole;
+  note: string;
+  invitedBy: PublicProfileDTO | null;
+  expiresAt: string;
+  status: InviteStatus;
+}
+
+export interface CreatedInviteDTO {
+  token: string;
+  path: string;
+  preview: InvitePreviewDTO;
+}
+
 export interface SignupDTO {
   shiftId: string;
   status: "reserved" | "confirmed" | "waitlist" | "attended" | "no_show" | "cancelled";

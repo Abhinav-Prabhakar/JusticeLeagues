@@ -360,3 +360,66 @@ describe("resource API", () => {
     expect(invalid.status).toBe(400);
   });
 });
+
+describe("invite API", () => {
+  async function loginSteward() {
+    const response = await post("/api/auth/login", {
+      email: "steward.harbor.1@justiceleagues.local",
+      password: "millbrook",
+    });
+    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+  }
+
+  it("mints a link, previews it, and redeems it exactly once", async () => {
+    const stewardCookie = await loginSteward();
+    const created = await post(
+      "/api/leagues/harbor/invites",
+      { role: "steward", chapterId: "ch_harbor_2", note: "Bring the Tuesday crew" },
+      stewardCookie,
+    );
+    expect(created.status).toBe(201);
+    const invite = (await created.json()) as {
+      token: string;
+      path: string;
+      preview: { leagueId: string; role: string; chapterId: string };
+    };
+    expect(invite.path).toBe(`/join/${invite.token}`);
+    expect(invite.preview).toMatchObject({ leagueId: "harbor", role: "steward", chapterId: "ch_harbor_2" });
+
+    const preview = await app.request(`/api/invites/${invite.token}`);
+    expect(preview.status).toBe(200);
+    expect(((await preview.json()) as { status: string }).status).toBe("open");
+
+    const guest = await register("guest@example.com", "Guest One");
+    const redeemed = await post(`/api/invites/${invite.token}/redeem`, {}, guest.cookie);
+    expect(redeemed.status).toBe(200);
+    expect(await redeemed.json()).toMatchObject({ leagueId: "harbor", role: "steward", awarded: true });
+
+    const ed = (await (await app.request("/api/edition", { headers: { cookie: guest.cookie } })).json()) as {
+      me: { memberships: { leagueId: string; role: string; chapterId: string }[] };
+    };
+    expect(ed.me.memberships.find((item) => item.leagueId === "harbor")).toMatchObject({
+      role: "steward",
+      chapterId: "ch_harbor_2",
+    });
+
+    const again = await register("guest2@example.com", "Guest Two");
+    const replay = await post(`/api/invites/${invite.token}/redeem`, {}, again.cookie);
+    expect(replay.status).toBe(409);
+    expect(((await replay.json()) as { code: string }).code).toBe("invite_used");
+  });
+
+  it("keeps minting behind the steward desk", async () => {
+    const member = await register("member@example.com", "Member One");
+    const joined = await post("/api/leagues/harbor/join", {}, member.cookie);
+    expect(joined.status).toBe(200);
+
+    const denied = await post("/api/leagues/harbor/invites", { role: "member" }, member.cookie);
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as { code: string }).code).toBe("not_steward");
+
+    const stewardCookie = await loginSteward();
+    const invalid = await post("/api/leagues/harbor/invites", { role: "owner" }, stewardCookie);
+    expect(invalid.status).toBe(400);
+  });
+});

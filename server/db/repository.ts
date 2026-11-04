@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { newId, transaction, type Db } from "../db";
 import { shiftStart } from "./schedule";
 import type {
@@ -8,6 +9,10 @@ import type {
   LedgerEntryDTO,
   MeDTO,
   MembershipDTO,
+  CreatedInviteDTO,
+  InvitePreviewDTO,
+  InviteRole,
+  InviteStatus,
   ProjectDTO,
   ProjectStatus,
   ResourceDTO,
@@ -1146,5 +1151,193 @@ export function expireResource(db: Db, actorId: string, resourceId: string): Res
     setActiveClaimStatus(db, resourceId, "released");
 
     return resourceFromRow(readResourceRow(db, resourceId)!);
+  });
+}
+
+interface InviteRow {
+  id: string;
+  league_id: string;
+  league_name: string;
+  league_hood: string;
+  league_cause: Cause;
+  chapter_id: string | null;
+  chapter_hood: string | null;
+  role: InviteRole;
+  note: string;
+  expires_at: string;
+  used_at: string | null;
+  creator_id: string | null;
+  creator_handle: string | null;
+  creator_name: string | null;
+}
+
+const hashInviteToken = (token: string) => createHash("sha256").update(token).digest("hex");
+
+function inviteFromRow(row: InviteRow): InvitePreviewDTO {
+  const expired = row.expires_at <= new Date().toISOString();
+  const status: InviteStatus = row.used_at ? "used" : expired ? "expired" : "open";
+  return {
+    leagueId: row.league_id,
+    leagueName: row.league_name,
+    leagueHood: row.league_hood,
+    leagueCause: row.league_cause,
+    chapterId: row.chapter_id,
+    chapterHood: row.chapter_hood,
+    role: row.role,
+    note: row.note,
+    invitedBy:
+      row.creator_id && row.creator_name
+        ? { id: row.creator_id, handle: row.creator_handle ?? row.creator_id, displayName: row.creator_name }
+        : null,
+    expiresAt: row.expires_at,
+    status,
+  };
+}
+
+function readInvite(db: Db, token: string): InviteRow | undefined {
+  return db
+    .prepare(
+      `SELECT i.*, l.name AS league_name, fn.name AS league_hood, l.cause AS league_cause,
+              n.name AS chapter_hood,
+              p.id AS creator_id, p.handle AS creator_handle, p.display_name AS creator_name
+         FROM league_invites i
+         JOIN leagues l ON l.id = i.league_id
+         JOIN chapters fc ON fc.id = 'ch_' || l.id
+         JOIN neighborhoods fn ON fn.id = fc.neighborhood_id
+         LEFT JOIN chapters c ON c.id = i.chapter_id
+         LEFT JOIN neighborhoods n ON n.id = c.neighborhood_id
+         LEFT JOIN profiles p ON p.id = i.created_by
+        WHERE i.token_hash = ?`,
+    )
+    .get(hashInviteToken(token)) as InviteRow | undefined;
+}
+
+export interface CreateInviteInput {
+  chapterId?: string;
+  role: InviteRole;
+  note?: string;
+  days?: number;
+}
+
+/** A steward mints a single-use link; the raw token is returned exactly once. */
+export function createInvite(db: Db, actorId: string, leagueId: string, input: CreateInviteInput): CreatedInviteDTO {
+  return transaction(db, () => {
+    assertSteward(db, actorId, leagueId);
+
+    let chapterId: string | null = null;
+    if (input.chapterId) {
+      const chapter = db
+        .prepare("SELECT id FROM chapters WHERE id = ? AND league_id = ?")
+        .get(input.chapterId, leagueId) as { id: string } | undefined;
+      if (!chapter) throw new AppError(400, "invalid_chapter", "That chapter is not part of this league.");
+      chapterId = chapter.id;
+    }
+
+    const token = randomBytes(24).toString("base64url");
+    const days = Math.min(30, Math.max(1, input.days ?? 7));
+    const expiresAt = new Date(Date.now() + days * 24 * 3600_000).toISOString();
+
+    db.prepare(
+      `INSERT INTO league_invites
+         (id, token_hash, league_id, chapter_id, role, note, created_by, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      newId("inv"),
+      hashInviteToken(token),
+      leagueId,
+      chapterId,
+      input.role,
+      input.note?.trim() ?? "",
+      actorId,
+      expiresAt,
+    );
+
+    const row = readInvite(db, token);
+    if (!row) throw new Error("The invitation could not be read back.");
+    return { token, path: `/join/${token}`, preview: inviteFromRow(row) };
+  });
+}
+
+export function previewInvite(db: Db, token: string): InvitePreviewDTO {
+  const row = readInvite(db, token);
+  if (!row) throw new AppError(404, "invite_not_found", "That invitation is not on file.");
+  return inviteFromRow(row);
+}
+
+export function redeemInvite(
+  db: Db,
+  profileId: string,
+  token: string,
+): { leagueId: string; role: "owner" | "steward" | "member"; awarded: boolean } {
+  return transaction(db, () => {
+    const row = readInvite(db, token);
+    if (!row) throw new AppError(404, "invite_not_found", "That invitation is not on file.");
+    if (row.used_at) throw new AppError(409, "invite_used", "That invitation has already been used.");
+    if (row.expires_at <= new Date().toISOString()) {
+      throw new AppError(409, "invite_expired", "That invitation has expired. Ask the steward for a fresh link.");
+    }
+
+    const league = db.prepare("SELECT status FROM leagues WHERE id = ?").get(row.league_id) as
+      { status: string } | undefined;
+    if (!league || league.status !== "active") {
+      throw new AppError(404, "league_not_found", "That league is not in this edition.");
+    }
+
+    const chapter =
+      row.chapter_id ??
+      (
+        db
+          .prepare(
+            `SELECT c.id
+               FROM chapters c
+               JOIN profiles p ON p.id = ?
+              WHERE c.league_id = ?
+              ORDER BY CASE
+                         WHEN c.neighborhood_id = p.home_neighborhood THEN 0
+                         WHEN c.id = 'ch_' || c.league_id THEN 1
+                         ELSE 2
+                       END,
+                       c.name
+              LIMIT 1`,
+          )
+          .get(profileId, row.league_id) as { id: string } | undefined
+      )?.id ??
+      null;
+
+    const existing = db
+      .prepare("SELECT role, status FROM league_members WHERE league_id = ? AND profile_id = ?")
+      .get(row.league_id, profileId) as { role: string; status: string } | undefined;
+
+    let role: "owner" | "steward" | "member" = row.role;
+    if (existing) {
+      // Never demote an owner or steward through a member invite.
+      role = existing.role === "member" ? row.role : (existing.role as "owner" | "steward");
+      db.prepare(
+        "UPDATE league_members SET status = 'active', role = ?, chapter_id = COALESCE(?, chapter_id), joined_at = CASE WHEN status = 'active' THEN joined_at ELSE ? END WHERE league_id = ? AND profile_id = ?",
+      ).run(role, chapter, new Date().toISOString(), row.league_id, profileId);
+    } else {
+      db.prepare(
+        "INSERT INTO league_members (league_id, profile_id, chapter_id, role, status) VALUES (?, ?, ?, ?, 'active')",
+      ).run(row.league_id, profileId, chapter, role);
+    }
+
+    const awarded = award(db, {
+      profileId,
+      leagueId: row.league_id,
+      chapterId: chapter,
+      delta: JOIN_POINTS,
+      reason: "Signed the league charter",
+      refType: "league_join",
+      refId: row.league_id,
+      key: `join:${row.league_id}:${profileId}`,
+    });
+
+    db.prepare("UPDATE league_invites SET used_at = ?, used_by = ? WHERE id = ?").run(
+      new Date().toISOString(),
+      profileId,
+      row.id,
+    );
+
+    return { leagueId: row.league_id, role, awarded };
   });
 }
