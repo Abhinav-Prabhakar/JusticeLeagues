@@ -4,6 +4,7 @@ import type { ShiftDTO } from "../../lib/types";
 import { isSignedUp } from "../../lib/api";
 import { useCancelShift, useEdition, useSignupShift } from "../../lib/queries";
 import { cn } from "../../utils/cn";
+import { ReportButton } from "../../components/ReportButton";
 import { DAYS } from "./constants";
 
 export function ShiftList({ shifts, empty = "No shifts posted this week." }: { shifts: ShiftDTO[]; empty?: string }) {
@@ -74,6 +75,12 @@ export function ShiftList({ shifts, empty = "No shifts posted this week." }: { s
               ))}
             </div>
             {s.waitlist > 0 && <span className="text-ink-3 shrink-0 font-mono text-[9px]">{s.waitlist} waiting</span>}
+            <ReportButton
+              targetType="shift"
+              targetId={s.id}
+              targetTitle={s.title}
+              signedIn={Boolean(me)}
+            />
             <button
               onClick={() => toggle(s)}
               disabled={pending}

@@ -91,6 +91,39 @@ export default function Dashboard() {
         </section>
       ) : (
         <>
+          {me.profile.restrictedUntil && (
+            <div role="status" className="border-vermilion bg-paper flex items-start gap-2 border-l-4 px-4 py-3 font-serif text-sm">
+              <LogOut size={15} className="text-vermilion mt-0.5 shrink-0" />
+              <span>
+                <strong>Posting is paused until {me.profile.restrictedUntil.slice(0, 10)}.</strong> Reading, joining a
+                league, and reporting stay open. Write to your steward if a decision looks wrong.
+              </span>
+            </div>
+          )}
+
+          <div className="text-ink-2 flex flex-wrap items-center gap-2 font-mono text-[10px]">
+            <Link
+              to="/inbox"
+              className="border-ink bg-paper hover:bg-paper-2 inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 uppercase tracking-wider"
+            >
+              Inbox{me.unread > 0 ? ` · ${me.unread} unread` : ""}
+            </Link>
+            {me.profile.role === "admin" && (
+              <Link
+                to="/admin"
+                className="border-ink bg-ink text-paper inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 uppercase tracking-wider"
+              >
+                Editor&apos;s desk
+              </Link>
+            )}
+            <Link
+              to="/privacy"
+              className="text-ink-3 hover:text-ink inline-flex items-center gap-1.5 uppercase tracking-wider underline underline-offset-2"
+            >
+              Your data
+            </Link>
+          </div>
+
           <div className="grid gap-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
             <div className="space-y-4">
               <section className="border-ink bg-ink text-paper border-2 p-6">

@@ -625,6 +625,37 @@ export default function LeagueSteward() {
         </section>
       </div>
 
+      <section aria-labelledby="safeguarding" className="border-ink bg-paper-2 border-2 p-5">
+        <div className="kicker text-vermilion flex items-center gap-1.5">
+          <ShieldCheck size={12} /> Safeguarding on your roster
+        </div>
+        <h2 id="safeguarding" className="font-display mt-1 text-2xl leading-tight font-black">
+          Keep young neighbours safe, without collecting their details
+        </h2>
+        <div className="text-ink-2 mt-2 grid gap-3 font-serif text-sm sm:grid-cols-3">
+          <p>
+            <strong className="font-sans text-[10px] tracking-wider uppercase">Contact.</strong> A neighbour under 18
+            is shown by name only. Their handle and email are withheld from every view, including yours. Reach their
+            guardian through the league, not by collecting a phone number.
+          </p>
+          <p>
+            <strong className="font-sans text-[10px] tracking-wider uppercase">Photos.</strong> Get a guardian&apos;s
+            written consent before publishing a photo of anyone under 18. No photo is ever required to earn points, and
+            a young neighbour can decline at any time.
+          </p>
+          <p>
+            <strong className="font-sans text-[10px] tracking-wider uppercase">Reports.</strong> If a young person is at
+            risk, report the item to the editor immediately. Hiding it in your league is the first step, not the last.
+          </p>
+        </div>
+        <Link
+          to="/privacy#young-neighbours"
+          className="kicker text-vermilion hover:text-ink mt-3 inline-flex transition-colors"
+        >
+          Read the full policy →
+        </Link>
+      </section>
+
       <ProjectReview />
       <AnomalyQueue leagueId={l.id} />
     </div>

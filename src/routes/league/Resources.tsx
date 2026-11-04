@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, Check, HandHeart, HandHelping, MapPin, Plus, Tag, UserRound, X } from "lucide-react";
 import { CAUSES } from "../../data";
-import { activeMembership } from "../../lib/api";
+import { activeMembership, handleLabel } from "../../lib/api";
 import {
   useClaimResource,
   useCreateResource,
@@ -11,6 +11,7 @@ import {
   useReleaseResource,
 } from "../../lib/queries";
 import type { ResourceDTO, ResourceKind, ResourceStatus } from "../../lib/types";
+import { ReportButton } from "../../components/ReportButton";
 import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
 import { useLeagueContext } from "./context";
@@ -370,9 +371,9 @@ function ResourceCard({
 
         <div className="text-ink-3 mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px]">
           <span className="flex items-center gap-1">
-            <UserRound size={10} /> {resource.createdBy ? `@${resource.createdBy.handle}` : "the league"}
+            <UserRound size={10} /> {resource.createdBy ? handleLabel(resource.createdBy) : "the league"}
           </span>
-          {resource.claimedBy && <span className="text-vermilion">held by @{resource.claimedBy.handle}</span>}
+          {resource.claimedBy && <span className="text-vermilion">held by {handleLabel(resource.claimedBy)}</span>}
           {mine && <span className="text-forest font-semibold">your post</span>}
         </div>
       </div>
@@ -390,7 +391,7 @@ function ResourceCard({
         )}
         {open && !signedIn && (
           <span className="text-ink-3 font-mono text-[9px]">
-            Sign in to claim · posted by @{resource.createdBy?.handle}
+            Sign in to claim · posted by {handleLabel(resource.createdBy)}
           </span>
         )}
         {(claimed || (open && mine)) && !closed && (
@@ -418,11 +419,18 @@ function ResourceCard({
             type="button"
             onClick={onExpire}
             disabled={busy}
-            className="text-ink-3 hover:text-vermilion ml-auto font-mono text-[9px] underline underline-offset-2 disabled:opacity-40"
+            className="text-ink-3 hover:text-vermilion font-mono text-[9px] underline underline-offset-2 disabled:opacity-40"
           >
             <X size={9} className="mr-0.5 inline" /> Expire
           </button>
         )}
+        <ReportButton
+          targetType="resource"
+          targetId={resource.id}
+          targetTitle={resource.title}
+          signedIn={signedIn && !mine}
+          className="ml-auto"
+        />
       </div>
     </article>
   );

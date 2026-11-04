@@ -35,6 +35,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [password, setPassword] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
   const [causes, setCauses] = useState<Cause[]>([]);
+  const [ageBand, setAgeBand] = useState<"adult" | "teen">("adult");
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [guardianConsent, setGuardianConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: city } = useQuery({
@@ -61,6 +64,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           password,
           homeNeighborhood: neighborhood || undefined,
           causes,
+          ageConfirmed,
+          ageBand,
+          guardianConsent: ageBand === "teen" ? guardianConsent : undefined,
         });
       } else {
         await login.mutateAsync({ email: email.trim(), password });
@@ -230,6 +236,73 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                   })}
                 </div>
               </fieldset>
+
+              <fieldset className="border-ink/30 border-t pt-4">
+                <legend className="kicker text-ink-2 mb-2">Safeguarding</legend>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2 font-serif text-sm">
+                    <input
+                      type="checkbox"
+                      checked={ageConfirmed}
+                      onChange={(event) => setAgeConfirmed(event.target.checked)}
+                      required
+                      className="accent-vermilion mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <span>
+                      I am 16 or older. <span className="text-ink-3">Nobody opens an account below 16.</span>
+                    </span>
+                  </label>
+
+                  <div className="flex flex-wrap gap-2 pt-1" role="radiogroup" aria-label="Age band">
+                    {[
+                      { value: "adult" as const, label: "I'm 18 or older" },
+                      { value: "teen" as const, label: "I'm 16 or 17" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={ageBand === option.value}
+                        onClick={() => setAgeBand(option.value)}
+                        className={cn(
+                          "border-ink rounded-full border-2 px-3 py-1.5 font-sans text-[10px] font-extrabold tracking-wider uppercase transition-colors",
+                          ageBand === option.value ? "bg-ink text-paper" : "bg-paper hover:bg-paper-2",
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {ageBand === "teen" && (
+                    <label className="flex items-start gap-2 border-l-2 border-vermilion pl-3 font-serif text-sm">
+                      <input
+                        type="checkbox"
+                        checked={guardianConsent}
+                        onChange={(event) => setGuardianConsent(event.target.checked)}
+                        required
+                        className="accent-vermilion mt-0.5 h-4 w-4 shrink-0"
+                      />
+                      <span>
+                        A parent or guardian consents to this account. Your handle and email stay private; rosters show
+                        your name only.
+                      </span>
+                    </label>
+                  )}
+
+                  <p className="text-ink-3 font-serif text-xs">
+                    By opening an account you accept the{" "}
+                    <Link to="/terms" className="underline underline-offset-2 hover:text-ink">
+                      house rules
+                    </Link>{" "}
+                    and the{" "}
+                    <Link to="/privacy" className="underline underline-offset-2 hover:text-ink">
+                      data policy
+                    </Link>
+                    . Photos of anyone under 18 need a guardian&apos;s consent.
+                  </p>
+                </div>
+              </fieldset>
             </>
           )}
 
@@ -244,7 +317,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
           <button
             type="submit"
-            disabled={pending || STATIC_PREVIEW}
+            disabled={
+              pending ||
+              STATIC_PREVIEW ||
+              (isRegister && (!ageConfirmed || (ageBand === "teen" && !guardianConsent)))
+            }
             className="btn-press border-ink bg-ink text-paper flex w-full items-center justify-center gap-2 rounded-full border-2 px-5 py-3 font-sans text-xs font-extrabold tracking-wider uppercase disabled:opacity-60"
           >
             {pending ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}

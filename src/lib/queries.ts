@@ -1,7 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AdminOverviewDTO,
+  AdminUserDTO,
   AnomalyDTO,
+  AuditLogEntryDTO,
   CreatedInviteDTO,
+  DataExportDTO,
+  FeatureFlagDTO,
+  NotificationInboxDTO,
+  ReportDTO,
+  ReportReason,
+  ReportStatus,
+  ReportTarget,
   EditionDTO,
   ImpactDTO,
   InvitePreviewDTO,
@@ -453,6 +463,9 @@ interface AuthPayload {
   password: string;
   homeNeighborhood?: string;
   causes?: string[];
+  ageConfirmed?: boolean;
+  ageBand?: "adult" | "teen";
+  guardianConsent?: boolean;
 }
 
 export function useAuth() {
@@ -769,5 +782,259 @@ export function useReverseLedgerEntry(leagueId: string) {
       toast("Correction posted", result.delta);
     },
     onError: (error) => toast(error.message),
+  });
+}
+
+
+// ---- Phase 5: the inbox, moderation, and the editor's desk ---------------
+
+export function useInbox(enabled = true) {
+  return useQuery({
+    queryKey: ["inbox"],
+    queryFn: () => api<NotificationInboxDTO>("/api/notifications"),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 10_000,
+    retry: 1,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (ids?: string[]) =>
+      api<{ updated: number; unread: number }>("/api/notifications/read", {
+        method: "POST",
+        body: JSON.stringify(ids && ids.length > 0 ? { ids } : {}),
+      }),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: ["inbox"] });
+      patchEdition(client, (edition) =>
+        edition.me ? { ...edition, me: { ...edition.me, unread: result.unread } } : edition,
+      );
+    },
+    onError: (error) => void error,
+  });
+}
+
+export interface ReportInput {
+  targetType: ReportTarget;
+  targetId: string;
+  reason: ReportReason;
+  detail?: string;
+}
+
+export function useReportContent() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: (input: ReportInput) =>
+      api<ReportDTO>("/api/reports", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin", "reports"] });
+      toast("Report filed — the editor has it");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useStewardHide(leagueId: string) {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: ({
+      targetType,
+      targetId,
+      note,
+    }: {
+      targetType: ReportTarget;
+      targetId: string;
+      note?: string;
+    }) =>
+      api<{ hidden: true }>(
+        `/api/moderation/hide?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(targetId)}`,
+        { method: "POST", body: JSON.stringify({ note }) },
+      ),
+    onSuccess: () => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["projects", leagueId] });
+      toast("Hidden from the edition. The record stays on file.");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useAdminOverview(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "overview"],
+    queryFn: () => api<AdminOverviewDTO>("/api/admin/overview"),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useAdminReports(status: ReportStatus | "all" = "open", enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "reports", status],
+    queryFn: () => api<{ reports: ReportDTO[] }>(`/api/admin/reports?status=${status}`),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 10_000,
+    retry: 1,
+  });
+}
+
+export function useHandleReport() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: ({
+      reportId,
+      decision,
+      note,
+    }: {
+      reportId: string;
+      decision: "dismiss" | "hide" | "strike";
+      note?: string;
+    }) =>
+      api<{ restrictedUntil: string | null }>(`/api/admin/reports/${reportId}`, {
+        method: "POST",
+        body: JSON.stringify({ decision, note }),
+      }),
+    onSuccess: (result, input) => {
+      void client.invalidateQueries({ queryKey: ["admin"] });
+      invalidateEdition(client);
+      toast(
+        input.decision === "dismiss"
+          ? "Report dismissed"
+          : result.restrictedUntil
+            ? "Strike recorded — posting paused for a fortnight"
+            : input.decision === "strike"
+              ? "Strike recorded"
+              : "Item hidden from the edition",
+      );
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useAdminUsers(q = "", enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "users", q],
+    queryFn: () => api<{ users: AdminUserDTO[] }>(`/api/admin/users?q=${encodeURIComponent(q)}`),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 10_000,
+    retry: 1,
+  });
+}
+
+export function useSetUserRole() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: ({ profileId, role }: { profileId: string; role: "member" | "admin" }) =>
+      api<{ role: string }>(`/api/admin/users/${profileId}/role`, {
+        method: "POST",
+        body: JSON.stringify({ role }),
+      }),
+    onSuccess: (_result, input) => {
+      void client.invalidateQueries({ queryKey: ["admin"] });
+      toast(input.role === "admin" ? "Editor access granted" : "Editor access removed");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useRestrictUser() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: ({ profileId, days, reason }: { profileId: string; days: number; reason?: string }) =>
+      api<{ restrictedUntil: string }>(`/api/admin/users/${profileId}/restrict`, {
+        method: "POST",
+        body: JSON.stringify({ days, reason }),
+      }),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: ["admin"] });
+      toast(`Posting paused until ${result.restrictedUntil.slice(0, 10)}`);
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useRestoreUser() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: (profileId: string) =>
+      api<{ restored: true }>(`/api/admin/users/${profileId}/restore`, { method: "POST" }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin"] });
+      toast("Posting restored");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useFeatureFlags(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "flags"],
+    queryFn: () => api<{ flags: FeatureFlagDTO[] }>("/api/admin/flags"),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useSetFeatureFlag() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
+      api<FeatureFlagDTO>(`/api/admin/flags/${key}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+    onSuccess: (flag) => {
+      void client.invalidateQueries({ queryKey: ["admin", "flags"] });
+      invalidateEdition(client);
+      toast(`${flag.label} ${flag.enabled ? "on" : "off"}`);
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useAuditLog(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: () => api<{ entries: AuditLogEntryDTO[] }>("/api/admin/audit?limit=150"),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useExportAccount() {
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: () => api<DataExportDTO>("/api/me/export"),
+    onSuccess: (payload) => {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "justice-leagues-export.json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast("Your data file is downloading");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useDeleteAccount() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ deleted: true }>("/api/me", { method: "DELETE", body: JSON.stringify({ confirm: "delete my account" }) }),
+    onSuccess: () => {
+      patchEdition(client, (edition) => ({ ...edition, me: null }));
+      void client.invalidateQueries();
+    },
   });
 }

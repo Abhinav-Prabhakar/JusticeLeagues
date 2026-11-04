@@ -21,6 +21,10 @@ const Login = lazy(() => import("./routes/Login"));
 const Register = lazy(() => import("./routes/Register"));
 const JoinInvite = lazy(() => import("./routes/JoinInvite"));
 const ChapterPage = lazy(() => import("./routes/ChapterPage"));
+const Inbox = lazy(() => import("./routes/Inbox"));
+const Admin = lazy(() => import("./routes/Admin"));
+const Privacy = lazy(() => import("./routes/Privacy"));
+const Terms = lazy(() => import("./routes/Terms"));
 const PrintLeague = lazy(() => import("./routes/PrintLeague"));
 
 export default function App() {
@@ -44,6 +48,10 @@ export default function App() {
             <Route path="settings" element={<LeagueSettings />} />
           </Route>
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="inbox" element={<Inbox />} />
+          <Route path="admin" element={<Admin />} />
+          <Route path="privacy" element={<Privacy />} />
+          <Route path="terms" element={<Terms />} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="join/:token" element={<JoinInvite />} />

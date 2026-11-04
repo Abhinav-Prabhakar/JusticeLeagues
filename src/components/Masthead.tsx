@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { CalendarClock, Compass, Newspaper, Plus, Scale, Search, Sparkles, X } from "lucide-react";
+import { Bell, CalendarClock, Compass, Newspaper, Plus, Scale, Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { CAUSES, CAUSE_KEYS, LEAGUES, SHIFTS, weekDays } from "../data";
 import { CountUp, Sparkline, useInView } from "../ui";
 import { useApp } from "../ctx";
@@ -173,14 +173,16 @@ export function Nav() {
             <Compass size={16} />
           </Link>
 
-          <Link
-            to="/ledger"
-            title="The public record"
-            aria-label="Read the public points ledger"
-            className="border-ink bg-paper hover:bg-paper-2 hidden h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-colors sm:grid"
-          >
-            <Scale size={16} />
-          </Link>
+          {data.flags.public_ledger !== false && (
+            <Link
+              to="/ledger"
+              title="The public record"
+              aria-label="Read the public points ledger"
+              className="border-ink bg-paper hover:bg-paper-2 hidden h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-colors sm:grid"
+            >
+              <Scale size={16} />
+            </Link>
+          )}
 
           <div
             className={cn(
@@ -256,6 +258,33 @@ export function Nav() {
           >
             <Plus size={16} strokeWidth={3} />
           </Link>
+
+          {me && (
+            <Link
+              to="/inbox"
+              title={me.unread > 0 ? `${me.unread} unread notices` : "Your inbox"}
+              aria-label={me.unread > 0 ? `Your inbox: ${me.unread} unread` : "Your inbox"}
+              className="border-ink bg-paper hover:bg-paper-2 relative grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-colors"
+            >
+              <Bell size={16} />
+              {me.unread > 0 && (
+                <span className="bg-vermilion text-paper absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-paper px-1 font-mono text-[9px] font-bold">
+                  {me.unread > 9 ? "9+" : me.unread}
+                </span>
+              )}
+            </Link>
+          )}
+
+          {me?.profile.role === "admin" && (
+            <Link
+              to="/admin"
+              title="The editor's desk"
+              aria-label="Open the editor's desk"
+              className="border-ink bg-paper hover:bg-paper-2 hidden h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition-colors sm:grid"
+            >
+              <ShieldCheck size={16} />
+            </Link>
+          )}
 
           <Link
             to="/dashboard"

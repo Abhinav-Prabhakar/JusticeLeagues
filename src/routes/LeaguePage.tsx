@@ -70,7 +70,8 @@ export default function LeaguePage() {
 
   const c = CAUSES[l.cause];
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
-  const tabs = isSteward ? [...TABS, STEWARD_TAB, SETTINGS_TAB] : TABS;
+  const baseTabs = data.flags.resources_exchange === false ? TABS.filter((tab) => tab.to !== "resources") : TABS;
+  const tabs = isSteward ? [...baseTabs, STEWARD_TAB, SETTINGS_TAB] : baseTabs;
   const myChapter = l.chapters.find((chapter) => chapter.id === membership?.chapterId);
   const rank = [...data.leagues].sort((a, b) => b.points - a.points).findIndex((x) => x.id === l.id) + 1;
   const context: LeagueContextValue = { league: l, edition: data };
@@ -89,12 +90,14 @@ export default function LeaguePage() {
           <c.icon size={12} /> {c.label} League
         </span>
         <ShareButton />
-        <Link
-          to={`/leagues/${l.id}/print`}
-          className="border-ink bg-paper hover:bg-mustard inline-flex items-center gap-1.5 border-2 px-2.5 py-1 font-sans text-[9px] font-extrabold tracking-wider uppercase transition-colors"
-        >
-          <Printer size={12} /> Print
-        </Link>
+        {data.flags.printed_profile !== false && (
+          <Link
+            to={`/leagues/${l.id}/print`}
+            className="border-ink bg-paper hover:bg-mustard inline-flex items-center gap-1.5 border-2 px-2.5 py-1 font-sans text-[9px] font-extrabold tracking-wider uppercase transition-colors"
+          >
+            <Printer size={12} /> Print
+          </Link>
+        )}
       </div>
 
       <div className="grid items-end gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">

@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Check, ExternalLink, FileText, MapPin, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Check, ExternalLink, EyeOff, FileText, MapPin, ShieldCheck, Sparkles, X } from "lucide-react";
 import { fmt } from "../../data";
 import { projectPoints } from "../../data/projects";
-import { useLeagueProjects, useReviewProject } from "../../lib/queries";
+import { handleLabel } from "../../lib/api";
+import { useLeagueProjects, useReviewProject, useStewardHide } from "../../lib/queries";
+import { ReportButton } from "../../components/ReportButton";
 import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
 import { useLeagueContext } from "./context";
@@ -21,7 +23,9 @@ export function ProjectReview() {
   const { league: l } = useLeagueContext();
   const { data, isPending, isError } = useLeagueProjects(l.id);
   const review = useReviewProject();
+  const hide = useStewardHide(l.id);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [hideId, setHideId] = useState<string | null>(null);
 
   const projects = data?.projects ?? [];
   const waiting = projects.filter((project) => project.status === "submitted");
@@ -92,8 +96,16 @@ export function ProjectReview() {
                   </span>
                   <span className="text-ink-3 font-mono text-[10px]">{shortDate(project.occurredOn)}</span>
                   <span className="text-ink-3 ml-auto font-mono text-[10px]">
-                    {project.submittedBy ? `@${project.submittedBy.handle}` : "Unknown member"}
+                    {project.submittedBy ? handleLabel(project.submittedBy) : "Unknown member"}
                   </span>
+                  {project.submittedBy && (
+                    <ReportButton
+                      targetType="project"
+                      targetId={project.id}
+                      targetTitle={project.title}
+                      signedIn
+                    />
+                  )}
                 </div>
 
                 <div className="grid gap-4 px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
@@ -152,6 +164,32 @@ export function ProjectReview() {
                       className="btn-press border-ink/40 text-ink-2 hover:border-ink hover:text-ink rounded-full border-2 px-3 py-2 font-sans text-[9px] font-extrabold tracking-wider uppercase disabled:opacity-40"
                     >
                       Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (hideId !== project.id) {
+                          setHideId(project.id);
+                          return;
+                        }
+                        setHideId(null);
+                        hide.mutate({
+                          targetType: "project",
+                          targetId: project.id,
+                          note: "Hidden by a steward from the review desk.",
+                        });
+                      }}
+                      disabled={hide.isPending}
+                      title="Hide from the edition without deleting the record"
+                      className={cn(
+                        "btn-press rounded-full border-2 px-3 py-2 font-sans text-[9px] font-extrabold tracking-wider uppercase disabled:opacity-40",
+                        hideId === project.id
+                          ? "border-vermilion bg-vermilion text-paper"
+                          : "border-ink/40 text-ink-2 hover:border-vermilion hover:text-vermilion",
+                      )}
+                    >
+                      <EyeOff size={10} className="mr-1 inline" />
+                      {hideId === project.id ? "Confirm hide" : "Hide"}
                     </button>
                     {confirming && (
                       <button

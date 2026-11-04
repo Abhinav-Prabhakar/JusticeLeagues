@@ -351,3 +351,12 @@ export function staticPublicLedger(options: {
     source: "imported",
   };
 }
+
+/**
+ * A young neighbour's handle is withheld from public DTOs, so the UI falls
+ * back to the display name rather than printing a bare "@".
+ */
+export function handleLabel(profile: { handle: string; displayName: string } | null | undefined): string {
+  if (!profile) return "";
+  return profile.handle ? `@${profile.handle}` : profile.displayName;
+}

@@ -37,7 +37,10 @@ export function Footer() {
               { to: "/leagues", label: "The Atlas" },
               { to: "/ledger", label: "The public record" },
               { to: "/dashboard", label: "Your desk" },
+              { to: "/inbox", label: "Your inbox" },
               { to: "/#charter", label: "The Charter" },
+              { to: "/terms", label: "House rules" },
+              { to: "/privacy", label: "Privacy & data" },
             ].map((item) => (
               <Link key={item.to} to={item.to} className="kicker text-ink-2 hover:text-vermilion transition-colors">
                 {item.label}
@@ -47,6 +50,7 @@ export function Footer() {
         </div>
         <div className="border-ink text-ink-2 flex flex-wrap items-center justify-between gap-3 border-t pt-5 font-mono text-[11px]">
           <span>© {new Date().getFullYear()} The Justice Leagues. Printed on recycled pixels.</span>
+          <span className="text-ink-3">Runs locally · no telemetry · points are server-authored</span>
           <span className="flex items-center gap-1.5">
             <Sparkles size={12} className="text-vermilion" /> Set in Playfair &amp; Source Serif
           </span>

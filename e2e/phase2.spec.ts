@@ -8,7 +8,7 @@ function uniqueEmail(tag: string): string {
 
 async function registerViaApi(context: BrowserContext, name: string, email: string) {
   const response = await context.request.post("/api/auth/register", {
-    data: { displayName: name, email, password: PASSWORD, causes: ["climate"] },
+    data: { displayName: name, email, password: PASSWORD, causes: ["climate"], ageConfirmed: true },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
 }

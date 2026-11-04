@@ -11,6 +11,7 @@ async function registerViaUi(page: Page, name: string, email: string) {
   await page.getByLabel("Display name").fill(name);
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByLabel(/i am 16 or older/i).check();
   await page.getByRole("button", { name: /open account/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { level: 1, name: /your desk/i })).toBeVisible();
@@ -18,7 +19,7 @@ async function registerViaUi(page: Page, name: string, email: string) {
 
 async function registerViaApi(context: BrowserContext, name: string, email: string) {
   const response = await context.request.post("/api/auth/register", {
-    data: { displayName: name, email, password: PASSWORD, causes: ["climate"] },
+    data: { displayName: name, email, password: PASSWORD, causes: ["climate"], ageConfirmed: true },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
 }

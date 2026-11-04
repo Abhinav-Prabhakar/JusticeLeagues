@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Compass, MapPin, Search, Crosshair, Sparkles, Users, X } from "lucide-react";
 import { CAUSES, fmt, type Cause } from "../data";
 import { HOOD_COORDS, distanceKm, formatDistance, parseLatLng } from "../data/geo";
-import { useSearch } from "../lib/queries";
+import { useEdition, useSearch } from "../lib/queries";
 import { Emblem, Photo, SectionHead } from "../ui";
 import { JoinButton } from "../components/JoinButton";
 import { AtlasMap } from "../components/AtlasMap";
@@ -49,6 +49,8 @@ export default function Leagues() {
   const [hover, setHover] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [geoState, setGeoState] = useState<"idle" | "locating" | "blocked" | "unsupported">("idle");
+  const { data: edition } = useEdition();
+  const geoOn = edition.flags.atlas_geolocation !== false;
 
   const update = useCallback(
     (patch: Record<string, string | null>) => {
@@ -171,15 +173,17 @@ export default function Leagues() {
             </label>
 
             <div className="flex flex-wrap items-end gap-2">
-              <button
-                type="button"
-                onClick={locate}
-                disabled={geoState === "locating"}
-                className="border-ink bg-mustard hover:bg-paper inline-flex items-center gap-2 border-2 px-3 py-2.5 font-sans text-[10px] font-extrabold tracking-wider uppercase shadow-[2px_2px_0_#14110d] transition-colors disabled:opacity-60"
-              >
-                <Crosshair size={14} />
-                {geoState === "locating" ? "Finding you…" : "Near me"}
-              </button>
+              {geoOn && (
+                <button
+                  type="button"
+                  onClick={locate}
+                  disabled={geoState === "locating"}
+                  className="border-ink bg-mustard hover:bg-paper inline-flex items-center gap-2 border-2 px-3 py-2.5 font-sans text-[10px] font-extrabold tracking-wider uppercase shadow-[2px_2px_0_#14110d] transition-colors disabled:opacity-60"
+                >
+                  <Crosshair size={14} />
+                  {geoState === "locating" ? "Finding you…" : "Near me"}
+                </button>
+              )}
               <label className="block">
                 <span className="kicker text-ink-3 mb-1.5 block text-[9px]">Or a neighbourhood</span>
                 <select

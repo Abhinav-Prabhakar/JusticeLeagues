@@ -72,7 +72,7 @@ test("a new member's join appears in the public ledger", async ({ browser }) => 
   try {
     const email = uniqueEmail("ledger-reader");
     const registered = await context.request.post("/api/auth/register", {
-      data: { displayName: "Ledger Reader", email, password: PASSWORD, causes: ["climate"] },
+      data: { displayName: "Ledger Reader", email, password: PASSWORD, causes: ["climate"], ageConfirmed: true },
     });
     expect(registered.ok(), await registered.text()).toBeTruthy();
     const me = (await registered.json()) as { me: { profile: { handle: string } } };
