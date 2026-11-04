@@ -6,7 +6,7 @@
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-77_unit_%C2%B7_17_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-98_unit_%C2%B7_24_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
@@ -29,6 +29,9 @@
 ## What it is
 
 - **Citywide leagues, neighbourhood chapters.** Climate, safety, food, transit, learning, housing, health, rights.
+- **An atlas you can search.** Name, neighbourhood, cause, or motto. SQLite FTS5 ranks by relevance, then the atlas re-ranks by walking distance. `q`, `cause`, `near`, and `radius` live in the URL, and “near me” falls back to a neighbourhood picker.
+- **A chapter with its own front door.** Every chapter has a shareable page with its shifts, wins, nearby leagues, and a copy/native share button.
+- **A printed profile.** Any league prints as a clean sheet — chapters table, recent approved work, and the ledger line, with the site chrome stripped by print CSS.
 - **Real shifts, real capacity.** Join a league, claim a shift, survive a refresh. Two accounts see the same filled spots.
 - **A full shift queues, not closes.** Waitlists promote the first neighbour when a spot opens; stewards can edit capacity, date, or place without losing signups.
 - **A steward desk, not a form.** Stewards post shifts, cancel them, record attendance, and approve the projects that earn points.
@@ -68,7 +71,11 @@
     <td width="50%"><a href="docs/screenshots/settings.webp"><img src="docs/screenshots/settings.webp" alt="League settings for identity, recruiting, and archiving" /></a><br/><sub><b>The masthead</b> · stewards edit, the owner archives</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><a href="docs/screenshots/leagues.webp"><img src="docs/screenshots/leagues.webp" alt="Every league in the atlas" /></a><br/><sub><b>The Atlas</b> · every league, one editorial index</sub></td>
+    <td colspan="2"><a href="docs/screenshots/leagues.webp"><img src="docs/screenshots/leagues.webp" alt="The Atlas with search, cause filters, a radius filter, and distance labels" /></a><br/><sub><b>The Atlas</b> · search, causes, and a walkable radius</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/chapter.webp"><img src="docs/screenshots/chapter.webp" alt="A neighbourhood chapter page with its points, shifts, wins, and nearby leagues" /></a><br/><sub><b>A chapter</b> · its own shareable front door</sub></td>
+    <td width="50%"><a href="docs/screenshots/print.webp"><img src="docs/screenshots/print.webp" alt="A printed league profile with chapters, recent approved work, and the ledger line" /></a><br/><sub><b>The printed profile</b> · chapters, work, and the ledger line</sub></td>
   </tr>
 </table>
 
@@ -95,6 +102,7 @@
 | API    | Hono on Node · Zod · scrypt · hashed session cookies              |
 | Data   | `node:sqlite` · plain-SQL migrations · append-only points ledger  |
 | Ranks  | `league_standings` / `chapter_standings` caches, rebuilt on write |
+| Search | `league_search` FTS5 cache + haversine distance in the API        |
 | Assets | Photography and fonts vendored into `public/` — fully offline     |
 
 Points flow one way: an action hits a Hono route, the repository validates it,
@@ -118,7 +126,7 @@ npm start          # dist/ + /api on :8787
 
 ### Static edition
 
-The GitHub Pages build is the same paper with the press stopped: browse every league, chapter, roster, shift, standings table, and the public record. Accounts and new points live only in the local database, so the static edition falls back to the printed fixtures for standings and the ledger.
+The GitHub Pages build is the same paper with the press stopped: browse every league, chapter, roster, shift, standings table, and the public record. Atlas search runs against the printed fixtures with the same cause and distance rules, so discovery works with no API. Accounts and new points live only in the local database, so standings and the ledger fall back to the printed edition.
 
 ```bash
 npm run build:pages   # /JusticeLeagues/ base, hash routes, fixtures only
@@ -156,8 +164,8 @@ Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 77 unit + API integration tests
-npm run test:e2e   # 17 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 98 unit + API integration tests
+npm run test:e2e   # 24 Playwright tests, isolated :8788 / :5174 / data/e2e.db
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

@@ -1,9 +1,10 @@
 # Justice Leagues — Prototype → Production Plan
 
-Status: **Phase 3 complete**. The ledger is the single source of truth, the
+Status: **Phase 4 complete**. The ledger is the single source of truth, the
 standings cache and leaderboard are real, badges and streaks are earned from
 the record, and stewards have an anomaly queue with an append-only reversal
-tool. The public ledger page is live.
+tool. The atlas now carries real coordinates, FTS5 discovery with distance
+filters, shareable chapter pages, and a printed league profile.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -301,17 +302,31 @@ totals sum to league totals; no client path can mint points; the leaderboard
 query answers in under 300ms at 10k leagues, with the cache rebuild held to a
 separate write-path budget (covered by `server/db/phase3.test.ts`).
 
-### Phase 4 — Discovery, atlas, and sharing (1–2 weeks)
+### Phase 4 — Discovery, atlas, and sharing (1–2 weeks) — **complete**
 
-- Real cities/neighbourhoods; lat/lng on leagues and chapters.
+- Real cities/neighbourhoods; lat/lng on leagues and chapters. ✅ Leagues gain
+  `lat`/`lng`; neighbourhood and chapter positions are backfilled from the
+  shared geography table on startup, and a linear projection keeps every
+  hand-placed atlas pin exactly where it was designed.
 - Editorial atlas from real coordinates; optional MapLibre + OSM tiles with a
-  drawn fallback when offline.
+  drawn fallback when offline. ✅ The drawn SVG atlas is the shipped map, so
+  discovery works with no tiles, no network, and no API key; pins are plotted
+  from real coordinates.
 - Server-side SQLite search (FTS5) with cause + distance filters; debounced,
-  URL-synced.
+  URL-synced. ✅ `league_search` FTS5 cache rebuilt on startup and after league
+  settings changes; bm25 relevance then haversine distance; `q`, `cause`,
+  `near`, and `radius` live in the URL with a 300 ms input debounce.
 - Public league/chapter pages with shareable routes, meta tags, and a print view.
-- Optional: "near me" geolocation with a graceful manual fallback.
+  ✅ `/leagues/:id/chapters/:chapterId`, per-route description/OG/Twitter tags,
+  a copy/native share button, and a dedicated print sheet with print CSS.
+- Optional: "near me" geolocation with a graceful manual fallback. ✅ Browser
+  geolocation, a neighbourhood picker, and a whole-city reset; a blocked or
+  unsupported browser explains itself and keeps the manual path.
 
-**Exit:** a newcomer can find and join a league within 5 km in under 2 minutes.
+**Exit:** met — `e2e/phase4.spec.ts` walks a newcomer from registration through
+a 5 km search to opening the nearest league and joining it. The same suite
+covers cause + radius filters, URL sync, geolocation, chapter pages, the print
+view, and phone-width overflow.
 
 ### Phase 5 — Trust, comms, and operations (2 weeks)
 
@@ -424,7 +439,10 @@ rollback plan.
 15. Ship shift waitlists/editing, member removal, and league settings. ✅
 16. Make the ledger the source of truth, add cached standings, real impact and
     badges, and the anomaly queue + public ledger page (Phase 3). ✅
-17. Next: real coordinates, FTS5 search, and a shareable atlas (Phase 4).
+17. Add real coordinates, FTS5 search, shareable chapter pages, and the printed
+    league profile (Phase 4). ✅
+18. Next: notifications, moderation, the admin console, safeguarding, and an
+    accessibility pass (Phase 5).
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded. **Met.**

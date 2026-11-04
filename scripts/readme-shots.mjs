@@ -99,7 +99,7 @@ await shoot(page, "chapters", true);
 await page.goto(base);
 await shoot(page, "home", false);
 
-await page.goto(`${base}/leagues`);
+await page.goto(`${base}/leagues?near=43.6532,-79.3832&radius=5`);
 await shoot(page, "leagues", true);
 
 await page.goto(`${base}/dashboard`);
@@ -175,6 +175,16 @@ const filed = steward.locator("section").filter({ hasText: "Filed projects" });
 await filed.getByRole("button", { name: /^approve$/i }).click();
 await filed.getByRole("button", { name: /^confirm \+\d+ jp$/i }).click();
 await steward.getByText(/project approved/i).waitFor();
+
+await steward.goto(`${base}/leagues/harbor/chapters/ch_harbor`);
+await shoot(steward, "chapter", true);
+
+await steward.goto(`${base}/leagues/harbor/print`);
+await settle(steward);
+await steward.locator("article.print-sheet").screenshot({ path: `${outDir}/print.png` });
+await compress("print");
+console.log("captured print (sheet)");
+
 await steward.goto(`${base}/ledger`);
 await shoot(steward, "ledger", true);
 

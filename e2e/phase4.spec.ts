@@ -91,6 +91,25 @@ test("the printed profile renders and offers a print button", async ({ page }) =
   await expect(page.getByRole("button", { name: /print this profile/i })).toBeHidden();
 });
 
+test("a newcomer finds a league within 5 km and joins it", async ({ page }) => {
+  await page.goto("/register");
+  await page.getByLabel("Display name").fill("New Neighbour");
+  await page.getByLabel("Email", { exact: true }).fill(`newcomer-${Date.now()}@example.com`);
+  await page.getByLabel("Password", { exact: true }).fill("correct horse battery");
+  await page.getByRole("button", { name: /open account/i }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto("/leagues?near=43.6532,-79.3832&radius=5");
+  const nearest = page.locator("main article").first();
+  await expect(nearest).toBeVisible();
+  const name = (await nearest.locator("h2").innerText()).trim();
+  await nearest.getByRole("link", { name: `Open ${name}` }).click();
+
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
+  await page.getByRole("button", { name: /join league/i }).click();
+  await expect(page.getByRole("button", { name: /you're in/i })).toBeVisible();
+});
+
 test("the atlas and chapter pages fit a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
 
