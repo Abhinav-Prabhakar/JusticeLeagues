@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, KeyRound, Loader2, Scale, UserPlus } from "lucide-react";
 import { CAUSES, CAUSE_KEYS, type Cause } from "../data";
 import { useApp } from "../ctx";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, STATIC_PREVIEW, STATIC_PREVIEW_MESSAGE } from "../lib/api";
 import { useAuth, useEdition } from "../lib/queries";
 import { usePageTitle } from "../lib/usePageTitle";
 import { cn } from "../utils/cn";
@@ -134,6 +134,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </div>
 
         <form onSubmit={submit} className="space-y-4">
+          {STATIC_PREVIEW && (
+            <p className="border-ink bg-paper border-l-4 px-3 py-2 font-serif text-sm">
+              <strong className="font-sans text-[10px] tracking-wider uppercase">Static edition.</strong>{" "}
+              {STATIC_PREVIEW_MESSAGE}
+            </p>
+          )}
+
           {isRegister && (
             <Field label="Display name" htmlFor="displayName" hint="Shown on league rosters.">
               <input
@@ -237,7 +244,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || STATIC_PREVIEW}
             className="btn-press border-ink bg-ink text-paper flex w-full items-center justify-center gap-2 rounded-full border-2 px-5 py-3 font-sans text-xs font-extrabold tracking-wider uppercase disabled:opacity-60"
           >
             {pending ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />}

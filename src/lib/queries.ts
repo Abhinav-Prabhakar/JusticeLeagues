@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ShiftDTO, ShiftRosterDTO } from "./types";
-import { api, initialEdition } from "./api";
+import { api, initialEdition, STATIC_PREVIEW, staticLeagueDetail } from "./api";
 import { useApp } from "../ctx";
 
 const KEY = ["edition"] as const;
@@ -19,6 +19,8 @@ export function useEdition() {
     queryKey: KEY,
     queryFn: () => api<EditionDTO>("/api/edition"),
     initialData: initialEdition,
+    // The static Pages edition has no API; the fixtures are the edition.
+    enabled: !STATIC_PREVIEW,
     // The fixture shell is only a placeholder. Mark it stale so a full page
     // load always re-reads the session instead of showing "signed out" for
     // the lifetime of staleTime.
@@ -42,6 +44,8 @@ export function useLeagueDetail(leagueId: string) {
   return useQuery({
     queryKey: ["league", leagueId],
     queryFn: () => api<LeagueDetail>(`/api/leagues/${leagueId}`),
+    initialData: STATIC_PREVIEW ? () => staticLeagueDetail(leagueId) : undefined,
+    enabled: !STATIC_PREVIEW,
     staleTime: 20_000,
     retry: 1,
   });

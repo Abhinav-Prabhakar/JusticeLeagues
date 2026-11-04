@@ -21,8 +21,10 @@ export const CAUSE_KEYS = Object.keys(CAUSES) as Cause[];
  * Seed photography is vendored into `public/photos/`, so the app renders
  * without a network. Width and height stay in the signature for call sites
  * that want to express intent; the file is a single 1200px edition.
+ *
+ * `BASE_URL` keeps the files reachable from the GitHub Pages subpath.
  */
-export const photo = (id: number, _w = 800, _h = 520) => `/photos/${id}.jpg`;
+export const photo = (id: number, _w = 800, _h = 520) => `${import.meta.env.BASE_URL}photos/${id}.jpg`;
 
 export const leagueById = (id: string) => LEAGUES.find((l) => l.id === id)!;
 

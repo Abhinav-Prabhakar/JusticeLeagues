@@ -3,20 +3,22 @@
 </div>
 
 <div align="center">
-  <a href="https://github.com/Abhinav-Prabhakar/justice-leagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/justice-leagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
-  <a href="https://github.com/Abhinav-Prabhakar/justice-leagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/justice-leagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/justice-leagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
+  <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
+  <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
   <img src="https://img.shields.io/badge/tests-32_unit_%C2%B7_8_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
   <img src="https://img.shields.io/badge/node-%E2%89%A522.5-1b7f5c?style=flat-square&labelColor=14110d" alt="Node 22.5+" />
+  <a href="https://abhinav-prabhakar.github.io/JusticeLeagues/"><img src="https://img.shields.io/badge/static_edition-live-1b7f5c?style=flat-square&labelColor=14110d" alt="Static edition" /></a>
 </div>
 
 <h3 align="center">A local-first civic newspaper for citywide leagues, neighbourhood chapters,<br/>volunteer shifts, and Justice Points.</h3>
 
 <p align="center">
   <a href="#run-it"><strong>Run it</strong></a> ·
+  <a href="https://abhinav-prabhakar.github.io/JusticeLeagues/"><strong>Read the static edition</strong></a> ·
   <a href="#the-paper-in-pictures"><strong>Screens</strong></a> ·
   <a href="#under-the-hood"><strong>Architecture</strong></a> ·
   <a href="ROADMAP.md"><strong>Roadmap</strong></a>
@@ -86,6 +88,22 @@ Production-ish, one origin:
 npm run build
 npm start          # dist/ + /api on :8787
 ```
+
+### Static edition
+
+The GitHub Pages build is the same paper with the press stopped: browse every league, chapter, roster, and shift, but accounts and points live only in the local database.
+
+```bash
+npm run build:pages   # /JusticeLeagues/ base, hash routes, fixtures only
+```
+
+It ships to <https://abhinav-prabhakar.github.io/JusticeLeagues/> from the `gh-pages` branch — no deployment workflow, no Actions checks:
+
+```bash
+npm run publish:pages   # build, then force-push dist/ to gh-pages
+```
+
+Sign-in, joining, and the steward desk are intentionally read-only there — run the app locally for the full edition.
 
 Local data lives in `data/justice-leagues.db`.
 

@@ -1,58 +1,17 @@
 import { LEAGUES, SHIFTS, WINS } from "../../src/data/fixtures";
+import { DEMO_PASSWORD, demoChapters, demoMembers, demoStewardEmail, slugify } from "../../src/data/demo";
 import { hashPassword } from "../auth/password";
 import { transaction, type Db } from "./index";
 import { shiftStart } from "./schedule";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
 
-/** Password for the seeded chapter stewards. Documented in the README. */
-export const DEMO_PASSWORD = "millbrook";
-
-const DEMO_NAMES = [
-  "Ada Okafor",
-  "Bruno Salas",
-  "Camille Duval",
-  "Darius Reed",
-  "Elena Petrova",
-  "Farah Haddad",
-  "Gideon Park",
-  "Hana Mori",
-  "Imani Brooks",
-  "Jonas Weber",
-  "Keiko Tan",
-  "Lucas Moreau",
-  "Maren Oduya",
-  "Nadia Rahman",
-  "Omar Haddad",
-  "Priya Nair",
-  "Quinn Alvarez",
-  "Rosa Delgado",
-  "Samir Patel",
-  "Tessa Lindqvist",
-  "Umar Bello",
-  "Vera Kovac",
-  "Wes Tanaka",
-  "Ximena Ortiz",
-  "Yara Haddad",
-  "Zane Whitfield",
-  "Aisha Bello",
-  "Diego Ramos",
-  "Freya Holm",
-  "Hugo Mensah",
-];
+export { DEMO_PASSWORD, slugify };
 
 let cachedDemoHash: string | null = null;
 function demoPasswordHash(): string {
   cachedDemoHash ??= hashPassword(DEMO_PASSWORD);
   return cachedDemoHash;
-}
-
-export function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }
 
 export function seedIfEmpty(db: Db): boolean {
@@ -112,31 +71,13 @@ export function seedIfEmpty(db: Db): boolean {
         league.streak,
         league.recruiting ? 1 : 0,
       );
-      insertChapter.run(
-        `ch_${league.id}`,
-        league.id,
-        `nb_${slugify(league.hood)}`,
-        `${league.hood} chapter`,
-        Math.round(league.points * 0.6),
-      );
-
       // A citywide league rolls up neighbourhood chapters. The founding
       // chapter keeps the majority of the sealed history; the next two
       // neighbourhoods by name carry the rest, so chapter totals still sum
-      // to the league total.
-      const others = hoods.filter((hood) => hood !== league.hood).slice(0, 2);
-      const founding = Math.round(league.points * 0.6);
-      const second = Math.round(league.points * 0.25);
-      const shares = [founding, second, league.points - founding - second];
-      others.forEach((hood, index) => {
-        insertChapter.run(
-          `ch_${league.id}_${index + 2}`,
-          league.id,
-          `nb_${slugify(hood)}`,
-          `${hood} chapter`,
-          shares[index + 1],
-        );
-      });
+      // to the league total. Shared with the static edition.
+      for (const chapter of demoChapters(league)) {
+        insertChapter.run(chapter.id, league.id, `nb_${slugify(chapter.hood)}`, chapter.name, chapter.points);
+      }
     }
 
     // Every chapter gets one seeded steward so roles, rosters, and check-in
@@ -150,45 +91,21 @@ export function seedIfEmpty(db: Db): boolean {
       INSERT INTO league_members (league_id, profile_id, chapter_id, role, status, joined_at)
       VALUES (?, ?, ?, ?, 'active', ?)
     `);
-    const chapterRows = db
-      .prepare(
-        `SELECT id, league_id, neighborhood_id, name
-           FROM chapters
-          ORDER BY league_id, (id = 'ch_' || league_id) DESC, name`,
-      )
-      .all() as unknown as { id: string; league_id: string; neighborhood_id: string; name: string }[];
 
-    const byLeague = new Map<string, typeof chapterRows>();
-    for (const chapter of chapterRows) {
-      const list = byLeague.get(chapter.league_id) ?? [];
-      list.push(chapter);
-      byLeague.set(chapter.league_id, list);
-    }
-
-    let nameIndex = 0;
     for (const league of LEAGUES) {
-      for (const [index, chapter] of (byLeague.get(league.id) ?? []).entries()) {
-        const name = DEMO_NAMES[nameIndex % DEMO_NAMES.length];
-        nameIndex += 1;
-        const profileId = `usr_seed_${league.id}_${index + 1}`;
-        const email = `steward.${league.id}.${index + 1}@justiceleagues.local`;
+      const chapters = demoChapters(league);
+      for (const [index, member] of demoMembers(league).entries()) {
         insertProfile.run(
-          profileId,
-          email,
+          member.profile.id,
+          demoStewardEmail(league.id, index),
           demoPasswordHash(),
-          slugify(name),
-          name,
+          member.profile.handle,
+          member.profile.displayName,
           CITY.id,
-          chapter.neighborhood_id,
+          `nb_${slugify(chapters[index].hood)}`,
           JSON.stringify([league.cause]),
         );
-        insertDemoMembership.run(
-          league.id,
-          profileId,
-          chapter.id,
-          index === 0 ? "owner" : "steward",
-          new Date(Date.UTC(league.founded, 4, index + 1, 9)).toISOString(),
-        );
+        insertDemoMembership.run(league.id, member.profile.id, member.chapterId, member.role, member.joinedAt);
       }
     }
 

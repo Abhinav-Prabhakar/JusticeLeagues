@@ -1,5 +1,15 @@
-import type { EditionDTO, LeagueDTO, MeDTO, MembershipDTO, ShiftDTO } from "./types";
+import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, MembershipDTO, ShiftDTO } from "./types";
 import { LEAGUES, SHIFTS, WINS } from "../data/fixtures";
+import { demoChapters, demoMembers } from "../data/demo";
+
+/**
+ * The GitHub Pages build is a read-only newspaper: no API, no accounts.
+ * Vite sets `mode = "pages"` (see `vite.config.ts` and `build:pages`).
+ */
+export const STATIC_PREVIEW = import.meta.env.MODE === "pages";
+
+export const STATIC_PREVIEW_MESSAGE =
+  "This is the read-only static edition. Run the paper locally to sign in, join a league, or claim a shift.";
 
 export class ApiError extends Error {
   constructor(
@@ -12,6 +22,8 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  if (STATIC_PREVIEW) throw new ApiError(503, "static_preview", STATIC_PREVIEW_MESSAGE);
+
   const headers = new Headers(init.headers);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
 
@@ -32,15 +44,7 @@ export function initialEdition(): EditionDTO {
   const leagues: LeagueDTO[] = LEAGUES.map((league) => ({
     ...league,
     slug: league.id,
-    chapters: [
-      {
-        id: `ch_${league.id}`,
-        name: `${league.hood} chapter`,
-        hood: league.hood,
-        points: league.points,
-        status: "active",
-      },
-    ],
+    chapters: demoChapters(league),
   }));
 
   const shifts: ShiftDTO[] = SHIFTS.map((shift) => {
@@ -57,6 +61,19 @@ export function initialEdition(): EditionDTO {
   });
 
   return { leagues, shifts, wins: WINS, me: null };
+}
+
+export interface StaticLeagueDetail {
+  league: LeagueDTO;
+  members: LeagueMemberDTO[];
+}
+
+/** League detail for the static edition — derived from the same fixtures as the seed. */
+export function staticLeagueDetail(leagueId: string): StaticLeagueDetail {
+  const leagues = initialEdition().leagues;
+  const league = leagues.find((item) => item.id === leagueId) ?? leagues[0];
+  const fixture = LEAGUES.find((item) => item.id === league.id)!;
+  return { league, members: demoMembers(fixture) };
 }
 
 export function activeMembership(me: MeDTO | null, leagueId: string): MembershipDTO | undefined {

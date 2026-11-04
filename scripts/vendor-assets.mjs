@@ -71,7 +71,7 @@ async function vendorFonts() {
       await writeFile(path.join(fontDir, file), bytes);
       seen.set(url, file);
     }
-    out += `${block.replace(/src:[^;]+;/, `src: url("/fonts/${file}") format("woff2");`)}\n`;
+    out += `${block.replace(/src:[^;]+;/, `src: url("./${file}") format("woff2");`)}\n`;
   }
 
   await writeFile(path.join(fontDir, "fonts.css"), out);

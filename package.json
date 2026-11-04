@@ -11,6 +11,8 @@
     "dev:web": "vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "npm run typecheck && vite build",
+    "build:pages": "npm run typecheck && vite build --mode pages",
+    "publish:pages": "node scripts/publish-pages.mjs",
     "start": "tsx server/index.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
