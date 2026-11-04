@@ -54,6 +54,9 @@ describe("JoinButton", () => {
         bio: "",
         homeNeighborhood: null,
         causes: [],
+        role: "member" as const,
+        ageBand: "adult" as const,
+        restrictedUntil: null,
         createdAt: new Date().toISOString(),
       },
       memberships: [
@@ -71,6 +74,7 @@ describe("JoinButton", () => {
       ledger: [],
       badges: [],
       streak: { current: 0, longest: 0, weekActive: false },
+      unread: 0,
     };
     edition.me = me;
 

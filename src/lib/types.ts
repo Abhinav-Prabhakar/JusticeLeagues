@@ -113,6 +113,9 @@ export interface ProjectDTO {
   createdAt: string;
 }
 
+export type ProfileRole = "member" | "admin";
+export type AgeBand = "adult" | "teen";
+
 export interface ProfileDTO {
   id: string;
   handle: string;
@@ -121,6 +124,10 @@ export interface ProfileDTO {
   bio: string;
   homeNeighborhood: string | null;
   causes: Cause[];
+  role: ProfileRole;
+  ageBand: AgeBand;
+  /** Set while a moderation restriction is in force. */
+  restrictedUntil: string | null;
   createdAt: string;
 }
 
@@ -195,6 +202,8 @@ export interface MeDTO {
   ledger: LedgerEntryDTO[];
   badges: BadgeDTO[];
   streak: StreakDTO;
+  /** Unread inbox count, so the masthead bell is accurate on first paint. */
+  unread: number;
 }
 
 export interface EditionDTO {
@@ -203,12 +212,133 @@ export interface EditionDTO {
   wins: WinDTO[];
   resources: ResourceDTO[];
   me: MeDTO | null;
+  /** Feature flags the editor controls from the admin console. */
+  flags: Record<string, boolean>;
 }
 
 export interface PublicProfileDTO {
   id: string;
   handle: string;
   displayName: string;
+  /** True when the neighbour is under 18 and their handle stays private. */
+  minor?: boolean;
+}
+
+export type NotificationKind =
+  | "welcome"
+  | "join"
+  | "shift"
+  | "reminder"
+  | "waitlist"
+  | "promotion"
+  | "project"
+  | "ledger"
+  | "moderation"
+  | "strike"
+  | "role"
+  | "invite";
+
+export interface NotificationDTO {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  leagueId: string | null;
+  refType: string;
+  refId: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationInboxDTO {
+  items: NotificationDTO[];
+  unread: number;
+  total: number;
+}
+
+export type ReportTarget = "project" | "resource" | "shift" | "league" | "member";
+export type ReportReason = "spam" | "harassment" | "safety" | "misinformation" | "other";
+export type ReportStatus = "open" | "actioned" | "dismissed";
+
+export interface ReportDTO {
+  id: string;
+  targetType: ReportTarget;
+  targetId: string;
+  targetTitle: string;
+  targetAuthor: PublicProfileDTO | null;
+  leagueId: string | null;
+  leagueName: string | null;
+  reason: ReportReason;
+  detail: string;
+  status: ReportStatus;
+  reporter: PublicProfileDTO | null;
+  handledAt: string | null;
+  resolutionNote: string;
+  createdAt: string;
+}
+
+export interface StrikeDTO {
+  id: string;
+  profile: PublicProfileDTO;
+  leagueId: string | null;
+  leagueName: string | null;
+  reason: string;
+  createdAt: string;
+}
+
+export interface AdminOverviewDTO {
+  people: number;
+  leagues: number;
+  openReports: number;
+  strikes: number;
+  restricted: number;
+  ledgerRows: number;
+  points: number;
+}
+
+export interface AdminUserDTO {
+  profile: PublicProfileDTO;
+  /** Null for a young neighbour: contact details stay with their steward. */
+  email: string | null;
+  contactHidden: boolean;
+  role: ProfileRole;
+  ageBand: AgeBand;
+  leagues: number;
+  points: number;
+  strikes: number;
+  restrictedUntil: string | null;
+  createdAt: string;
+}
+
+export interface FeatureFlagDTO {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export interface AuditLogEntryDTO {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  leagueId: string | null;
+  leagueName: string | null;
+  actor: PublicProfileDTO | null;
+  meta: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface DataExportDTO {
+  exportedAt: string;
+  profile: ProfileDTO;
+  memberships: MembershipDTO[];
+  signups: SignupDTO[];
+  ledger: LedgerEntryDTO[];
+  badges: BadgeDTO[];
+  notifications: NotificationDTO[];
+  strikes: StrikeDTO[];
 }
 
 export interface ShiftRosterEntryDTO {

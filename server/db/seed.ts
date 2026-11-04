@@ -18,6 +18,9 @@ import { CITY_CENTRE, HOOD_COORDS, hoodCoords } from "../../src/data/geo";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
 
+export const EDITOR_ID = "usr_seed_editor";
+export const EDITOR_EMAIL = "admin@justiceleagues.local";
+
 export { DEMO_PASSWORD, slugify };
 
 let cachedDemoHash: string | null = null;
@@ -146,6 +149,21 @@ export function seedIfEmpty(db: Db): boolean {
         insertCharterBadge.run(member.profile.id, league.id, member.joinedAt);
       }
     }
+
+    // The editor's desk. One admin account ships with the edition so reports,
+    // strikes, and flags can be handled without editing the database by hand.
+    db.prepare(
+      `INSERT INTO profiles (id, email, password_hash, handle, display_name, bio, city_id, home_neighborhood, causes, role)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 'admin')`,
+    ).run(
+      EDITOR_ID,
+      EDITOR_EMAIL,
+      demoPasswordHash(),
+      "editor",
+      "The Editor",
+      "Keeps the citywide desk: reports, strikes, flags, and the audit log.",
+      CITY.id,
+    );
 
     // A pair of open classifieds per league, shared with the static edition.
     const insertResource = db.prepare(`
@@ -285,5 +303,58 @@ export function ensurePhase4(db: Db): { indexed: number; chapters: number } {
       .run();
 
     return { indexed: rebuildLeagueSearch(db), chapters: Number(chapters.changes) };
+  });
+}
+
+const DEFAULT_FLAGS: { key: string; label: string; description: string }[] = [
+  { key: "atlas_geolocation", label: "Near me", description: "Offer the browser location button on the Atlas." },
+  { key: "printed_profile", label: "Printed profile", description: "Offer the printable league sheet." },
+  {
+    key: "resources_exchange",
+    label: "Resource exchange",
+    description: "Let members post and claim offers and needs.",
+  },
+  { key: "public_ledger", label: "Public ledger", description: "Publish the citywide Justice Points record." },
+];
+
+/**
+ * Startup/backfill hook for databases that predate Phase 5. Flags are
+ * idempotent, and exactly one editor account is guaranteed so the moderation
+ * desk is never unreachable.
+ */
+export function ensurePhase5(db: Db): { flags: number; editor: boolean } {
+  return transaction(db, () => {
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO feature_flags (key, label, description, enabled) VALUES (?, ?, ?, 1)",
+    );
+    for (const flag of DEFAULT_FLAGS) insert.run(flag.key, flag.label, flag.description);
+
+    let editor = false;
+    const existing = db.prepare("SELECT 1 FROM profiles WHERE role = 'admin'").get();
+    if (!existing) {
+      const byEmail = db.prepare("SELECT id FROM profiles WHERE email = ?").get(EDITOR_EMAIL) as
+        | { id: string }
+        | undefined;
+      if (byEmail) {
+        db.prepare("UPDATE profiles SET role = 'admin' WHERE id = ?").run(byEmail.id);
+      } else {
+        db.prepare(
+          `INSERT INTO profiles (id, email, password_hash, handle, display_name, bio, city_id, home_neighborhood, causes, role)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, '[]', 'admin')`,
+        ).run(
+          EDITOR_ID,
+          EDITOR_EMAIL,
+          demoPasswordHash(),
+          "editor",
+          "The Editor",
+          "Keeps the citywide desk: reports, strikes, flags, and the audit log.",
+          CITY.id,
+        );
+      }
+      editor = true;
+    }
+
+    const { count } = db.prepare("SELECT COUNT(*) AS count FROM feature_flags").get() as { count: number };
+    return { flags: Number(count), editor };
   });
 }

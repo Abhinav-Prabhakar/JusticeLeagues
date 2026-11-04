@@ -25,6 +25,7 @@ interface AnomalyRow {
   resolution_note: string;
   handle: string | null;
   display_name: string | null;
+  age_band: string | null;
   delta: number | null;
 }
 
@@ -190,7 +191,7 @@ export function recordReversal(
 export function listAnomalyRows(db: Db, leagueId: string): AnomalyDTO[] {
   const rows = db
     .prepare(
-      `SELECT a.*, p.handle, p.display_name, l.delta
+      `SELECT a.*, p.handle, p.display_name, p.age_band, l.delta
          FROM anomalies a
          LEFT JOIN profiles p ON p.id = a.profile_id
          LEFT JOIN points_ledger l ON l.id = a.ledger_id
@@ -206,7 +207,12 @@ export function listAnomalyRows(db: Db, leagueId: string): AnomalyDTO[] {
     leagueId: row.league_id,
     profile:
       row.profile_id && row.display_name
-        ? { id: row.profile_id, handle: row.handle ?? row.profile_id, displayName: row.display_name }
+        ? {
+            id: row.profile_id,
+            handle: row.age_band === "teen" ? "" : (row.handle ?? row.profile_id),
+            displayName: row.display_name,
+            minor: row.age_band === "teen",
+          }
         : null,
     ledgerId: row.ledger_id,
     category: row.category,

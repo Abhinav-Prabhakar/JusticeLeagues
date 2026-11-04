@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app";
 import { openDatabase, type Db } from "./db";
 import { runMigrations } from "./db/migrate";
-import { seedIfEmpty } from "./db/seed";
+import { ensurePhase5, seedIfEmpty } from "./db/seed";
 
 let db: Db;
 let app: ReturnType<typeof createApp>;
@@ -29,6 +29,7 @@ async function register(email = "ada@example.com", displayName = "Ada Lovelace")
       email,
       password: "correct horse battery",
       causes: ["climate"],
+      ageConfirmed: true,
     },
     undefined,
     { "x-forwarded-for": `10.0.0.${registrationCount}` },
@@ -42,6 +43,7 @@ beforeEach(() => {
   db = openDatabase(":memory:");
   runMigrations(db);
   seedIfEmpty(db);
+  ensurePhase5(db);
   app = createApp(db);
 });
 

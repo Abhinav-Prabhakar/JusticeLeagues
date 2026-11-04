@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { openDatabase, DEFAULT_DB_PATH } from "./db";
 import { runMigrations } from "./db/migrate";
-import { ensurePhase3, ensurePhase4, seedIfEmpty } from "./db/seed";
+import { ensurePhase3, ensurePhase4, ensurePhase5, seedIfEmpty } from "./db/seed";
 
 /**
  * Local-only API + static host.
@@ -21,6 +21,7 @@ const applied = runMigrations(db);
 const seeded = seedIfEmpty(db);
 const { inserted } = ensurePhase3(db);
 const { indexed } = ensurePhase4(db);
+const { flags, editor } = ensurePhase5(db);
 
 const app = createApp(db);
 const port = Number(process.env.PORT ?? 8787);
@@ -32,7 +33,9 @@ serve({ fetch: app.fetch, port }, (info) => {
   console.log(
     `  migrations ${applied.length ? applied.join(", ") : "up to date"}${seeded ? " · seeded" : ""}${
       inserted ? ` · materialised ${inserted} sealed ledger rows` : ""
-    }${indexed ? ` · indexed ${indexed} leagues for search` : ""}`,
+    }${indexed ? ` · indexed ${indexed} leagues for search` : ""}${
+      editor ? " · opened the editor desk" : ""
+    } · ${flags} feature flags`,
   );
   console.log(`  mode      ${dist ? "web + api" : "api only (run `npm run dev:web` for the UI)"}`);
 });

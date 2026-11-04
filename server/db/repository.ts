@@ -13,6 +13,9 @@ import {
 } from "./anomalies";
 import { rebuildStandings } from "./standings";
 import { rebuildLeagueSearch } from "./search-index";
+import { notify, notifyLeagueStewards, unreadCount } from "./notifications";
+import { featureMap } from "./admin";
+import { assertNotRestricted } from "./guards";
 import type {
   AnomalyDTO,
   ChapterDTO,
@@ -140,6 +143,9 @@ interface ProfileRow {
   bio: string;
   home_neighborhood: string | null;
   causes: string;
+  role: "member" | "admin";
+  age_band: "adult" | "teen";
+  restricted_until: string | null;
   created_at: string;
 }
 
@@ -314,7 +320,7 @@ export function listShifts(db: Db, profileId: string | null = null): ShiftDTO[] 
 
 export function listWins(db: Db): WinDTO[] {
   const rows = db
-    .prepare("SELECT * FROM wins WHERE status = 'approved' ORDER BY occurred_at DESC")
+    .prepare("SELECT * FROM wins WHERE status = 'approved' AND hidden = 0 ORDER BY occurred_at DESC")
     .all() as unknown as WinRow[];
   return rows.map((row) => ({
     id: row.id,
@@ -339,6 +345,10 @@ function profileFromRow(row: ProfileRow) {
     bio: row.bio,
     homeNeighborhood: row.home_neighborhood,
     causes: JSON.parse(row.causes) as Cause[],
+    role: row.role,
+    ageBand: row.age_band,
+    restrictedUntil:
+      row.restricted_until && row.restricted_until > new Date().toISOString() ? row.restricted_until : null,
     createdAt: row.created_at,
   };
 }
@@ -411,6 +421,7 @@ export function getMe(db: Db, profileId: string): MeDTO {
     })),
     badges: listBadges(db, profileId),
     streak: streakForProfile(db, profileId),
+    unread: unreadCount(db, profileId),
   };
 }
 
@@ -421,13 +432,14 @@ export function getEdition(db: Db, profileId: string | null): EditionDTO {
     wins: listWins(db),
     resources: listResources(db),
     me: profileId ? getMe(db, profileId) : null,
+    flags: featureMap(db),
   };
 }
 
 export function listMembers(db: Db, leagueId: string): LeagueMemberDTO[] {
   const rows = db
     .prepare(
-      `SELECT p.id, p.handle, p.display_name, m.role, m.chapter_id, m.joined_at
+      `SELECT p.id, p.handle, p.display_name, p.age_band, m.role, m.chapter_id, m.joined_at
          FROM league_members m JOIN profiles p ON p.id = m.profile_id
         WHERE m.league_id = ? AND m.status = 'active'
         ORDER BY m.joined_at`,
@@ -436,17 +448,21 @@ export function listMembers(db: Db, leagueId: string): LeagueMemberDTO[] {
     id: string;
     handle: string;
     display_name: string;
+    age_band: string;
     role: LeagueMemberDTO["role"];
     chapter_id: string | null;
     joined_at: string;
   }[];
 
-  return rows.map((row) => ({
-    profile: { id: row.id, handle: row.handle, displayName: row.display_name },
-    role: row.role,
-    chapterId: row.chapter_id,
-    joinedAt: row.joined_at,
-  }));
+  return rows.map((row) => {
+    const minor = row.age_band === "teen";
+    return {
+      profile: { id: row.id, handle: minor ? "" : row.handle, displayName: row.display_name, minor },
+      role: row.role,
+      chapterId: row.chapter_id,
+      joinedAt: row.joined_at,
+    };
+  });
 }
 
 function award(
@@ -491,8 +507,9 @@ function award(
 }
 
 function joinWithinTransaction(db: Db, profileId: string, leagueId: string): boolean {
-  const league = db.prepare("SELECT id, status, recruiting FROM leagues WHERE id = ?").get(leagueId) as
-    { id: string; status: string; recruiting: number } | undefined;
+  const league = db.prepare("SELECT id, name, status, recruiting FROM leagues WHERE id = ?").get(leagueId) as
+    | { id: string; name: string; status: string; recruiting: number }
+    | undefined;
   if (!league || league.status !== "active") {
     throw new AppError(404, "league_not_found", "That league is not in this edition.");
   }
@@ -546,6 +563,27 @@ function joinWithinTransaction(db: Db, profileId: string, leagueId: string): boo
     refId: leagueId,
     key: `join:${leagueId}:${profileId}`,
   });
+
+  const member = db.prepare("SELECT display_name FROM profiles WHERE id = ?").get(profileId) as
+    | { display_name: string }
+    | undefined;
+  notify(db, {
+    profileId,
+    kind: "join",
+    title: `Charter signed: ${league.name}`,
+    body: `You are on the roster. ${JOIN_POINTS} Justice Points are on your ledger. Open the league to claim a shift.`,
+    leagueId,
+    refType: "league",
+    refId: leagueId,
+  });
+  notifyLeagueStewards(db, leagueId, {
+    kind: "join",
+    title: "A neighbour joined",
+    body: `${member?.display_name ?? "A new member"} signed the charter. Say hello on the roster.`,
+    excludeProfileId: profileId,
+    refType: "profile",
+    refId: profileId,
+  });
   return true;
 }
 
@@ -580,8 +618,19 @@ function waitlistPositionFor(db: Db, shiftId: string, profileId: string): number
 
 /** Move the earliest waitlisted volunteer into a free spot. Returns true if someone moved. */
 function promoteWaitlist(db: Db, shiftId: string): boolean {
-  const shift = db.prepare("SELECT capacity, base_filled, status FROM shifts WHERE id = ?").get(shiftId) as
-    { capacity: number; base_filled: number; status: string } | undefined;
+  const shift = db
+    .prepare("SELECT title, league_id, place_name, starts_at, capacity, base_filled, status FROM shifts WHERE id = ?")
+    .get(shiftId) as
+    | {
+        title: string;
+        league_id: string;
+        place_name: string;
+        starts_at: string;
+        capacity: number;
+        base_filled: number;
+        status: string;
+      }
+    | undefined;
   if (!shift || shift.status !== "open") return false;
 
   const { count } = db
@@ -599,6 +648,15 @@ function promoteWaitlist(db: Db, shiftId: string): boolean {
     shiftId,
     next.profile_id,
   );
+  notify(db, {
+    profileId: next.profile_id,
+    kind: "promotion",
+    title: `You're off the waitlist: ${shift.title}`,
+    body: `A spot opened. ${new Date(shift.starts_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${shift.place_name}.`,
+    leagueId: shift.league_id,
+    refType: "shift",
+    refId: shiftId,
+  });
   return true;
 }
 
@@ -608,10 +666,23 @@ export function signupShift(
   shiftId: string,
 ): { status: "signed_up" | "waitlisted" | "already"; filled: number; autoJoined: boolean; position: number | null } {
   return transaction(db, () => {
+    assertNotRestricted(db, profileId);
     const shift = db
-      .prepare("SELECT id, league_id, capacity, base_filled, status FROM shifts WHERE id = ?")
+      .prepare(
+        "SELECT id, league_id, title, place_name, starts_at, capacity, base_filled, status FROM shifts WHERE id = ?",
+      )
       .get(shiftId) as
-      { id: string; league_id: string; capacity: number; base_filled: number; status: string } | undefined;
+      | {
+          id: string;
+          league_id: string;
+          title: string;
+          place_name: string;
+          starts_at: string;
+          capacity: number;
+          base_filled: number;
+          status: string;
+        }
+      | undefined;
     if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
     if (shift.status !== "open") throw new AppError(409, "shift_closed", "This shift is not taking signups.");
 
@@ -667,6 +738,32 @@ export function signupShift(
       nextStatus,
     );
 
+    const when = new Date(shift.starts_at).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+    notify(db, {
+      profileId,
+      kind: full ? "waitlist" : "shift",
+      title: full ? `Waitlisted: ${shift.title}` : `Shift claimed: ${shift.title}`,
+      body: full
+        ? `The shift is full, so you are in line. We will tell you the moment a spot opens. ${when} at ${shift.place_name}.`
+        : `${when} at ${shift.place_name}. A steward records attendance, so points land after the shift.`,
+      leagueId: shift.league_id,
+      refType: "shift",
+      refId: shiftId,
+    });
+    notify(db, {
+      profileId,
+      kind: "reminder",
+      title: `Reminder set: ${shift.title}`,
+      body: `${when} at ${shift.place_name}. It stays on your desk until a steward checks you in.`,
+      leagueId: shift.league_id,
+      refType: "shift",
+      refId: shiftId,
+    });
+
     return {
       status: full ? ("waitlisted" as const) : ("signed_up" as const),
       filled: Math.min(shift.capacity, shift.base_filled + count + (full ? 0 : 1)),
@@ -712,7 +809,7 @@ function assertMember(db: Db, profileId: string, leagueId: string) {
   if (!row) throw new AppError(403, "not_member", "Join the league before filing a project.");
 }
 
-function assertSteward(db: Db, profileId: string, leagueId: string) {
+export function assertSteward(db: Db, profileId: string, leagueId: string) {
   const row = db
     .prepare("SELECT role FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
     .get(leagueId, profileId) as { role: string } | undefined;
@@ -745,7 +842,7 @@ function readRoster(db: Db, shiftId: string): ShiftRosterDTO {
 
   const rows = db
     .prepare(
-      `SELECT ss.status, ss.hours, ss.checked_in_at, p.id, p.handle, p.display_name
+      `SELECT ss.status, ss.hours, ss.checked_in_at, p.id, p.handle, p.display_name, p.age_band
          FROM shift_signups ss
          JOIN profiles p ON p.id = ss.profile_id
         WHERE ss.shift_id = ?
@@ -765,6 +862,7 @@ function readRoster(db: Db, shiftId: string): ShiftRosterDTO {
     id: string;
     handle: string;
     display_name: string;
+    age_band: string;
   }[];
 
   return {
@@ -787,7 +885,12 @@ function readRoster(db: Db, shiftId: string): ShiftRosterDTO {
     pointsPerHour: ATTENDANCE_POINTS_PER_HOUR,
     sealed: shift.base_filled,
     entries: rows.map((row) => ({
-      profile: { id: row.id, handle: row.handle, displayName: row.display_name },
+      profile: {
+        id: row.id,
+        handle: maskHandle(row.handle, row.age_band, row.id),
+        displayName: row.display_name,
+        minor: row.age_band === "teen",
+      },
       status: row.status,
       hours: row.hours,
       checkedInAt: row.checked_in_at,
@@ -871,6 +974,19 @@ export function checkInShift(
           SET status = ?, hours = ?, checked_in_at = ?, checked_in_by = ?, updated_at = ?
         WHERE shift_id = ? AND profile_id = ?`,
     ).run(status, hours, now, actorId, now, shiftId, profileId);
+
+    notify(db, {
+      profileId,
+      kind: "shift",
+      title: status === "attended" ? `Checked in: ${shift.title}` : `Recorded as a no-show: ${shift.title}`,
+      body:
+        status === "attended"
+          ? `${hours}h on the books${awarded > 0 ? `, ${awarded} Justice Points awarded` : ""}. The ledger has the entry.`
+          : "A steward marked this shift as missed. Points are not awarded for a no-show. Talk to your steward if that is wrong.",
+      leagueId: shift.league_id,
+      refType: "shift",
+      refId: shiftId,
+    });
 
     return { awarded, roster: readRoster(db, shiftId) };
   });
@@ -1003,6 +1119,12 @@ export function cancelShiftAsSteward(db: Db, actorId: string, shiftId: string): 
 interface ProjectRow extends WinRow {
   submitter_handle: string | null;
   submitter_name: string | null;
+  submitter_age_band: string | null;
+}
+
+/** A young neighbour's handle is a contact route, so rosters show a name only. */
+function maskHandle(handle: string | null, ageBand: string | null | undefined, fallback: string): string {
+  return ageBand === "teen" ? "" : (handle ?? fallback);
 }
 
 function projectFromRow(row: ProjectRow): ProjectDTO {
@@ -1022,8 +1144,9 @@ function projectFromRow(row: ProjectRow): ProjectDTO {
       row.submitted_by && row.submitter_name
         ? {
             id: row.submitted_by,
-            handle: row.submitter_handle ?? row.submitted_by,
+            handle: maskHandle(row.submitter_handle, row.submitter_age_band, row.submitted_by),
             displayName: row.submitter_name,
+            minor: row.submitter_age_band === "teen",
           }
         : null,
     reviewedAt: row.reviewed_at,
@@ -1034,7 +1157,8 @@ function projectFromRow(row: ProjectRow): ProjectDTO {
 function readProjectRow(db: Db, projectId: string): ProjectRow | undefined {
   return db
     .prepare(
-      `SELECT w.*, p.handle AS submitter_handle, p.display_name AS submitter_name
+      `SELECT w.*, p.handle AS submitter_handle, p.display_name AS submitter_name,
+              p.age_band AS submitter_age_band
          FROM wins w LEFT JOIN profiles p ON p.id = w.submitted_by
         WHERE w.id = ?`,
     )
@@ -1045,7 +1169,8 @@ export function listProjects(db: Db, actorId: string, leagueId: string): Project
   assertSteward(db, actorId, leagueId);
   const rows = db
     .prepare(
-      `SELECT w.*, p.handle AS submitter_handle, p.display_name AS submitter_name
+      `SELECT w.*, p.handle AS submitter_handle, p.display_name AS submitter_name,
+              p.age_band AS submitter_age_band
          FROM wins w LEFT JOIN profiles p ON p.id = w.submitted_by
         WHERE w.league_id = ?
         ORDER BY CASE w.status WHEN 'submitted' THEN 0 ELSE 1 END, w.occurred_at DESC`,
@@ -1068,6 +1193,7 @@ export interface SubmitProjectInput {
 export function submitProject(db: Db, actorId: string, leagueId: string, input: SubmitProjectInput): ProjectDTO {
   return transaction(db, () => {
     assertMember(db, actorId, leagueId);
+    assertNotRestricted(db, actorId);
 
     const league = db.prepare("SELECT id, photo_id FROM leagues WHERE id = ?").get(leagueId) as
       { id: string; photo_id: number } | undefined;
@@ -1102,6 +1228,15 @@ export function submitProject(db: Db, actorId: string, leagueId: string, input: 
       `${input.occurredOn}T12:00:00.000Z`,
       actorId,
     );
+
+    notifyLeagueStewards(db, leagueId, {
+      kind: "project",
+      title: "A project needs review",
+      body: `${input.title} was filed by a member. Approve it to put points on the ledger.`,
+      excludeProfileId: actorId,
+      refType: "project",
+      refId: id,
+    });
 
     const project = readProjectRow(db, id);
     if (!project) throw new Error("The filed project could not be read back.");
@@ -1146,6 +1281,24 @@ export function reviewProject(db: Db, actorId: string, projectId: string, decisi
     rebuildStandings(db);
     if (decision === "approve" && project.submitted_by) evaluateBadges(db, project.submitted_by);
 
+    if (project.submitted_by) {
+      notify(db, {
+        profileId: project.submitted_by,
+        kind: "project",
+        title:
+          decision === "approve"
+            ? `Project approved: ${project.title}`
+            : `Project sent back: ${project.title}`,
+        body:
+          decision === "approve"
+            ? `+${points} Justice Points are on the ledger now.`
+            : "A steward sent it back without points. Revise the details and file it again.",
+        leagueId: project.league_id,
+        refType: "project",
+        refId: project.id,
+      });
+    }
+
     const updated = readProjectRow(db, projectId);
     if (!updated) throw new Error("The reviewed project could not be read back.");
     return projectFromRow(updated);
@@ -1167,8 +1320,10 @@ interface ResourceRow {
   created_at: string;
   creator_handle: string | null;
   creator_name: string | null;
+  creator_age_band: string | null;
   claimer_handle: string | null;
   claimer_name: string | null;
+  claimer_age_band: string | null;
 }
 
 function resourceFromRow(row: ResourceRow): ResourceDTO {
@@ -1184,11 +1339,21 @@ function resourceFromRow(row: ResourceRow): ResourceDTO {
     status: row.status,
     createdBy:
       row.created_by && row.creator_name
-        ? { id: row.created_by, handle: row.creator_handle ?? row.created_by, displayName: row.creator_name }
+        ? {
+            id: row.created_by,
+            handle: maskHandle(row.creator_handle, row.creator_age_band, row.created_by),
+            displayName: row.creator_name,
+            minor: row.creator_age_band === "teen",
+          }
         : null,
     claimedBy:
       row.claimed_by && row.claimer_name
-        ? { id: row.claimed_by, handle: row.claimer_handle ?? row.claimed_by, displayName: row.claimer_name }
+        ? {
+            id: row.claimed_by,
+            handle: maskHandle(row.claimer_handle, row.claimer_age_band, row.claimed_by),
+            displayName: row.claimer_name,
+            minor: row.claimer_age_band === "teen",
+          }
         : null,
     createdAt: row.created_at,
   };
@@ -1198,7 +1363,9 @@ function readResourceRow(db: Db, resourceId: string): ResourceRow | undefined {
   return db
     .prepare(
       `SELECT r.*, c.handle AS creator_handle, c.display_name AS creator_name,
-              k.handle AS claimer_handle, k.display_name AS claimer_name
+              c.age_band AS creator_age_band,
+              k.handle AS claimer_handle, k.display_name AS claimer_name,
+              k.age_band AS claimer_age_band
          FROM resources r
          LEFT JOIN profiles c ON c.id = r.created_by
          LEFT JOIN profiles k ON k.id = r.claimed_by
@@ -1211,11 +1378,13 @@ export function listResources(db: Db, leagueId?: string): ResourceDTO[] {
   const rows = db
     .prepare(
       `SELECT r.*, c.handle AS creator_handle, c.display_name AS creator_name,
-              k.handle AS claimer_handle, k.display_name AS claimer_name
+              c.age_band AS creator_age_band,
+              k.handle AS claimer_handle, k.display_name AS claimer_name,
+              k.age_band AS claimer_age_band
          FROM resources r
          LEFT JOIN profiles c ON c.id = r.created_by
          LEFT JOIN profiles k ON k.id = r.claimed_by
-        ${leagueId ? "WHERE r.league_id = ?" : ""}
+        WHERE r.hidden = 0 ${leagueId ? "AND r.league_id = ?" : ""}
         ORDER BY CASE r.status
                    WHEN 'open' THEN 0
                    WHEN 'claimed' THEN 1
@@ -1239,6 +1408,7 @@ export interface CreateResourceInput {
 
 export function createResource(db: Db, actorId: string, leagueId: string, input: CreateResourceInput): ResourceDTO {
   return transaction(db, () => {
+    assertNotRestricted(db, actorId);
     assertMember(db, actorId, leagueId);
 
     const chapter = db
@@ -1385,6 +1555,7 @@ interface InviteRow {
   creator_id: string | null;
   creator_handle: string | null;
   creator_name: string | null;
+  creator_age_band: string | null;
 }
 
 const hashInviteToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -1403,7 +1574,12 @@ function inviteFromRow(row: InviteRow): InvitePreviewDTO {
     note: row.note,
     invitedBy:
       row.creator_id && row.creator_name
-        ? { id: row.creator_id, handle: row.creator_handle ?? row.creator_id, displayName: row.creator_name }
+        ? {
+            id: row.creator_id,
+            handle: maskHandle(row.creator_handle, row.creator_age_band, row.creator_id),
+            displayName: row.creator_name,
+            minor: row.creator_age_band === "teen",
+          }
         : null,
     expiresAt: row.expires_at,
     status,
@@ -1415,7 +1591,8 @@ function readInvite(db: Db, token: string): InviteRow | undefined {
     .prepare(
       `SELECT i.*, l.name AS league_name, fn.name AS league_hood, l.cause AS league_cause,
               n.name AS chapter_hood,
-              p.id AS creator_id, p.handle AS creator_handle, p.display_name AS creator_name
+              p.id AS creator_id, p.handle AS creator_handle, p.display_name AS creator_name,
+              p.age_band AS creator_age_band
          FROM league_invites i
          JOIN leagues l ON l.id = i.league_id
          JOIN chapters fc ON fc.id = 'ch_' || l.id
@@ -1554,6 +1731,27 @@ export function redeemInvite(
       row.id,
     );
 
+    notify(db, {
+      profileId,
+      kind: "invite",
+      title: `You're in: ${row.league_name}`,
+      body: `${row.creator_name ?? "A steward"} invited you as ${role === "member" ? "a member" : `a ${role}`}. Your desk has the league now.`,
+      leagueId: row.league_id,
+      refType: "invite",
+      refId: row.id,
+    });
+    if (row.creator_id && row.creator_id !== profileId) {
+      notify(db, {
+        profileId: row.creator_id,
+        kind: "invite",
+        title: "Your invitation was accepted",
+        body: `A neighbour joined ${row.league_name} from the link you minted.`,
+        leagueId: row.league_id,
+        refType: "invite",
+        refId: row.id,
+      });
+    }
+
     return { leagueId: row.league_id, role, awarded };
   });
 }
@@ -1586,6 +1784,15 @@ export function removeMember(db: Db, actorId: string, leagueId: string, profileI
       profileId,
     );
     rebuildStandings(db);
+    notify(db, {
+      profileId,
+      kind: "moderation",
+      title: "You were taken off a roster",
+      body: "A steward removed you from a league roster. Points already on the ledger stay yours. Ask the steward if you need context.",
+      leagueId,
+      refType: "league",
+      refId: leagueId,
+    });
     audit(db, {
       leagueId,
       actorId,

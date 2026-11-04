@@ -82,7 +82,15 @@ export function initialEdition(): EditionDTO {
     };
   });
 
-  return { leagues, shifts, wins: WINS, resources: LEAGUES.flatMap(demoResources), me: null };
+  return {
+    leagues,
+    shifts,
+    wins: WINS,
+    resources: LEAGUES.flatMap(demoResources),
+    me: null,
+    // The static edition ships with every switch on; it has no admin desk.
+    flags: { atlas_geolocation: true, printed_profile: true, resources_exchange: true, public_ledger: true },
+  };
 }
 
 export interface StaticLeagueDetail {

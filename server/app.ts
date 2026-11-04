@@ -50,6 +50,19 @@ import {
 } from "./db/repository";
 import { listStandings } from "./db/standings";
 import { searchLeagues } from "./db/search";
+import { listNotifications, markNotificationsRead, notify } from "./db/notifications";
+import { createReport, handleReport, listReports, stewardHide } from "./db/moderation";
+import {
+  adminOverview,
+  listAdminUsers,
+  listAuditLog,
+  listFeatureFlags,
+  restoreProfile,
+  restrictProfile,
+  setFeatureFlag,
+  setUserRole,
+} from "./db/admin";
+import { deleteAccount, exportAccount } from "./db/account";
 import { getImpact } from "./db/impact";
 import { listPublicLedger } from "./db/ledger";
 import { newId } from "./db";
@@ -66,6 +79,43 @@ const registerSchema = z.object({
   password: z.string().min(10).max(200),
   homeNeighborhood: z.string().trim().max(80).optional(),
   causes: z.array(z.enum(CAUSE_VALUES)).max(8).optional(),
+  // Safeguarding: no account without an explicit age gate.
+  ageConfirmed: z.boolean().refine((value) => value === true, "Confirm you are 16 or older."),
+  ageBand: z.enum(["adult", "teen"]).default("adult"),
+  guardianConsent: z.boolean().optional(),
+});
+
+const reportSchema = z.object({
+  targetType: z.enum(["project", "resource", "shift", "league", "member"]),
+  targetId: z.string().trim().min(1).max(120),
+  reason: z.enum(["spam", "harassment", "safety", "misinformation", "other"]),
+  detail: z.string().trim().max(500).optional(),
+});
+
+const reportDecisionSchema = z.object({
+  decision: z.enum(["dismiss", "hide", "strike"]),
+  note: z.string().trim().max(300).optional(),
+});
+
+const stewardHideSchema = z.object({
+  note: z.string().trim().max(300).optional(),
+});
+
+const readNotificationsSchema = z.object({
+  ids: z.array(z.string().trim().min(1).max(80)).max(200).optional(),
+});
+
+const flagSchema = z.object({ enabled: z.boolean() });
+
+const roleSchema = z.object({ role: z.enum(["member", "admin"]) });
+
+const restrictSchema = z.object({
+  days: z.number().int().min(1).max(90),
+  reason: z.string().trim().max(200).optional(),
+});
+
+const deleteAccountSchema = z.object({
+  confirm: z.literal("delete my account"),
 });
 
 const loginSchema = z.object({
@@ -497,8 +547,18 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     if (!parsed.success) {
       return c.json({ error: "Please check the details and try again.", code: "invalid_input" }, 400);
     }
-    const { displayName, password, homeNeighborhood, causes } = parsed.data;
+    const { displayName, password, homeNeighborhood, causes, ageBand, guardianConsent } = parsed.data;
     const email = parsed.data.email.toLowerCase();
+
+    if (ageBand === "teen" && !guardianConsent) {
+      return c.json(
+        {
+          error: "A neighbour under 18 needs a guardian's consent before opening an account.",
+          code: "guardian_required",
+        },
+        400,
+      );
+    }
 
     if (db.prepare("SELECT 1 FROM profiles WHERE email = ?").get(email)) {
       return c.json({ error: "An account with that email already exists.", code: "email_taken" }, 409);
@@ -513,8 +573,10 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     const handle = uniqueHandle(db, slugifyHandle(displayName));
 
     db.prepare(
-      `INSERT INTO profiles (id, email, password_hash, handle, display_name, city_id, home_neighborhood, causes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO profiles (
+         id, email, password_hash, handle, display_name, city_id, home_neighborhood, causes,
+         age_band, guardian_consent
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       email,
@@ -524,7 +586,21 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
       city?.id ?? null,
       homeNeighborhood ?? null,
       JSON.stringify(causes ?? []),
+      ageBand,
+      guardianConsent ? 1 : 0,
     );
+
+    notify(db, {
+      profileId: id,
+      kind: "welcome",
+      title: "Welcome to the Leagues",
+      body:
+        ageBand === "teen"
+          ? "Your account is open. A guardian's consent is on file. Contact details stay private; rosters show your name only."
+          : "Your account is open. Find a league on the Atlas, sign a charter, and claim a shift.",
+      refType: "profile",
+      refId: id,
+    });
 
     purgeExpiredSessions(db);
     const session = createSession(db, id);
@@ -566,6 +642,156 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
   app.get("/api/auth/me", (c) => {
     const profile = c.get("profile");
     return c.json({ me: profile ? getMe(db, profile.id) : null });
+  });
+
+  // ---- The inbox ---------------------------------------------------------
+
+  app.get("/api/notifications", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(listNotifications(db, profile.id));
+  });
+
+  app.post("/api/notifications/read", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = readNotificationsSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return c.json({ error: "Check the notification selection.", code: "invalid_input" }, 400);
+    }
+    const updated = markNotificationsRead(db, profile.id, parsed.data.ids);
+    return c.json({ updated, unread: listNotifications(db, profile.id).unread });
+  });
+
+  // ---- Moderation --------------------------------------------------------
+
+  app.post("/api/reports", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    if (!rateLimit(clientKey(c.req.raw.headers, "report"), 12, 60_000)) {
+      return c.json({ error: "Too many reports. Wait a minute.", code: "rate_limited" }, 429);
+    }
+    const parsed = reportSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Choose what is wrong and try again.", code: "invalid_input" }, 400);
+    }
+    return c.json(createReport(db, profile.id, parsed.data), 201);
+  });
+
+  app.post("/api/moderation/hide", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = stewardHideSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the moderation note.", code: "invalid_input" }, 400);
+    }
+    const targetType = c.req.query("targetType");
+    const targetId = c.req.query("targetId");
+    if (!targetType || !targetId) {
+      return c.json({ error: "Name the item to hide.", code: "invalid_input" }, 400);
+    }
+    return c.json(
+      stewardHide(
+        db,
+        profile.id,
+        targetType as Parameters<typeof stewardHide>[2],
+        targetId,
+        parsed.data.note ?? "",
+      ),
+    );
+  });
+
+  // ---- The editor's desk -------------------------------------------------
+
+  app.get("/api/admin/overview", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(adminOverview(db, profile.id));
+  });
+
+  app.get("/api/admin/reports", auth(), (c) => {
+    const profile = c.get("profile")!;
+    const status = c.req.query("status") ?? "open";
+    const allowed = ["open", "actioned", "dismissed", "all"] as const;
+    if (!allowed.includes(status as (typeof allowed)[number])) {
+      return c.json({ error: "Unknown report status.", code: "invalid_query" }, 400);
+    }
+    return c.json({ reports: listReports(db, profile.id, status as (typeof allowed)[number]) });
+  });
+
+  app.post("/api/admin/reports/:id", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = reportDecisionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Choose dismiss, hide, or strike.", code: "invalid_input" }, 400);
+    }
+    return c.json(handleReport(db, profile.id, c.req.param("id"), parsed.data.decision, parsed.data.note ?? ""));
+  });
+
+  app.get("/api/admin/users", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json({ users: listAdminUsers(db, profile.id, c.req.query("q") ?? "") });
+  });
+
+  app.post("/api/admin/users/:id/role", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = roleSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Choose member or editor.", code: "invalid_input" }, 400);
+    }
+    return c.json(setUserRole(db, profile.id, c.req.param("id"), parsed.data.role));
+  });
+
+  app.post("/api/admin/users/:id/restrict", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = restrictSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Choose a pause between 1 and 90 days.", code: "invalid_input" }, 400);
+    }
+    return c.json(restrictProfile(db, profile.id, c.req.param("id"), parsed.data.days, parsed.data.reason ?? ""));
+  });
+
+  app.post("/api/admin/users/:id/restore", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(restoreProfile(db, profile.id, c.req.param("id")));
+  });
+
+  app.get("/api/admin/flags", auth(), (c) => {
+    const profile = c.get("profile")!;
+    adminOverview(db, profile.id);
+    return c.json({ flags: listFeatureFlags(db) });
+  });
+
+  app.patch("/api/admin/flags/:key", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = flagSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "A flag is either on or off.", code: "invalid_input" }, 400);
+    }
+    return c.json(setFeatureFlag(db, profile.id, c.req.param("key"), parsed.data.enabled));
+  });
+
+  app.get("/api/admin/audit", auth(), (c) => {
+    const profile = c.get("profile")!;
+    const limit = Number(c.req.query("limit") ?? 100);
+    return c.json({ entries: listAuditLog(db, profile.id, Number.isFinite(limit) ? limit : 100) });
+  });
+
+  // ---- Your data ---------------------------------------------------------
+
+  app.get("/api/me/export", auth(), (c) => {
+    const profile = c.get("profile")!;
+    c.header("content-disposition", 'attachment; filename="justice-leagues-export.json"');
+    return c.json(exportAccount(db, profile.id));
+  });
+
+  app.delete("/api/me", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = deleteAccountSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json(
+        { error: 'Type "delete my account" to confirm. Your ledger history stays anonymous.', code: "confirm_required" },
+        400,
+      );
+    }
+    deleteAccount(db, profile.id);
+    deleteCookie(c, SESSION_COOKIE, { path: "/" });
+    return c.json({ deleted: true });
   });
 
   app.all("/api/*", (c) => c.json({ error: "Not found", code: "not_found" }, 404));

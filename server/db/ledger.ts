@@ -14,6 +14,7 @@ interface LedgerRow {
   profile_id: string | null;
   handle: string | null;
   display_name: string | null;
+  age_band: string | null;
   created_at: string;
 }
 
@@ -81,7 +82,7 @@ function readLedger(db: Db, options: PublicLedgerOptions): PublicLedgerDTO {
     .prepare(
       `SELECT p.id, p.delta, p.reason, p.ref_type, p.league_id, p.chapter_id, p.profile_id,
               p.created_at, l.name AS league_name, l.slug AS league_slug,
-              c.name AS chapter_name, pr.handle, pr.display_name
+              c.name AS chapter_name, pr.handle, pr.display_name, pr.age_band
          FROM points_ledger p
          JOIN leagues l ON l.id = p.league_id
          LEFT JOIN chapters c ON c.id = p.chapter_id
@@ -106,7 +107,12 @@ function readLedger(db: Db, options: PublicLedgerOptions): PublicLedgerDTO {
         chapterName: row.chapter_name,
         profile:
           row.profile_id && row.display_name
-            ? { id: row.profile_id, handle: row.handle ?? row.profile_id, displayName: row.display_name }
+            ? {
+                id: row.profile_id,
+                handle: row.age_band === "teen" ? "" : (row.handle ?? row.profile_id),
+                displayName: row.display_name,
+                minor: row.age_band === "teen",
+              }
             : null,
         createdAt: row.created_at,
       }),
