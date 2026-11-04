@@ -22,7 +22,9 @@ import {
   useCreateInvite,
   useCreateShift,
   useShiftRoster,
+  useUpdateShift,
 } from "../../lib/queries";
+import type { ChapterDTO, ShiftDTO } from "../../lib/types";
 import type { CreatedInviteDTO, InviteRole } from "../../lib/types";
 import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
@@ -440,6 +442,7 @@ export default function LeagueSteward() {
                   </span>
                   <span className="font-mono text-[10px]">
                     {shift.filled}/{shift.spots} filled
+                    {shift.waitlist > 0 ? ` · ${shift.waitlist} waiting` : ""}
                   </span>
                 </div>
                 <div className="font-display mt-1 text-lg leading-tight font-bold">{shift.title}</div>
@@ -457,6 +460,7 @@ export default function LeagueSteward() {
               </button>
             );
           })}
+          {activeShift && <ShiftEditor key={activeShift.id} shift={activeShift} chapters={l.chapters} />}
         </div>
 
         <section className="border-ink bg-paper self-start border-2" aria-live="polite">
@@ -481,6 +485,7 @@ export default function LeagueSteward() {
                 </span>
                 <span>
                   {activeShift.filled}/{activeShift.spots} filled
+                  {activeShift.waitlist > 0 ? ` · ${activeShift.waitlist} waiting` : ""}
                 </span>
                 <button
                   type="button"
@@ -534,6 +539,7 @@ export default function LeagueSteward() {
                   {(roster.data?.entries ?? []).map((entry) => {
                     const isBusy = busy && checkIn.variables?.profileId === entry.profile.id;
                     const final = entry.status === "attended";
+                    const waitlisted = entry.status === "waitlist";
                     return (
                       <li
                         key={entry.profile.id}
@@ -557,6 +563,8 @@ export default function LeagueSteward() {
                           <span className="text-forest flex items-center gap-1 font-mono text-[10px] font-semibold">
                             <Sparkles size={11} /> {fmt(Math.round(entry.hours * pointsPerHour))} JP
                           </span>
+                        ) : waitlisted ? (
+                          <span className="text-ink-3 font-mono text-[9px]">Waiting · promoted when a spot opens</span>
                         ) : (
                           <div className="flex items-center gap-1.5">
                             <button
@@ -618,5 +626,130 @@ export default function LeagueSteward() {
 
       <ProjectReview />
     </div>
+  );
+}
+
+function ShiftEditor({ shift, chapters }: { shift: ShiftDTO; chapters: ChapterDTO[] }) {
+  const update = useUpdateShift();
+  const [form, setForm] = useState({
+    chapterId: shift.chapterId,
+    title: shift.title,
+    day: shift.day,
+    time: shift.time,
+    duration: shift.dur,
+    capacity: shift.spots,
+    place: shift.place,
+  });
+
+  return (
+    <details className="border-ink bg-paper-2 mt-4 border-2">
+      <summary className="text-ink-2 flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+        <span className="kicker text-ink text-[9px]">Edit this shift</span>
+        <span className="font-mono text-[9px]">capacity cannot drop below signups</span>
+      </summary>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          update.mutate({ shiftId: shift.id, ...form, capacity: Number(form.capacity) });
+        }}
+        className="border-ink/20 grid gap-2.5 border-t px-3 py-3 sm:grid-cols-2"
+      >
+        <label className="block sm:col-span-2">
+          <span className="kicker text-ink-3 text-[9px]">Title</span>
+          <input
+            required
+            minLength={3}
+            maxLength={80}
+            value={form.title}
+            onChange={(event) => setForm({ ...form, title: event.target.value })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="kicker text-ink-3 text-[9px]">Chapter</span>
+          <select
+            value={form.chapterId}
+            onChange={(event) => setForm({ ...form, chapterId: event.target.value })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          >
+            {chapters.map((chapter) => (
+              <option key={chapter.id} value={chapter.id}>
+                {chapter.hood}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="kicker text-ink-3 text-[9px]">Place</span>
+          <input
+            required
+            minLength={2}
+            maxLength={80}
+            value={form.place}
+            onChange={(event) => setForm({ ...form, place: event.target.value })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="kicker text-ink-3 text-[9px]">Day</span>
+          <select
+            value={form.day}
+            onChange={(event) => setForm({ ...form, day: Number(event.target.value) })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          >
+            {DAYS.map((day, index) => (
+              <option key={day} value={index}>
+                {day}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="kicker text-ink-3 text-[9px]">Start</span>
+          <input
+            type="time"
+            required
+            value={form.time}
+            onChange={(event) => setForm({ ...form, time: event.target.value })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="kicker text-ink-3 text-[9px]">Duration</span>
+          <select
+            value={form.duration}
+            onChange={(event) => setForm({ ...form, duration: event.target.value })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          >
+            {["1h", "2h", "3h", "4h"].map((duration) => (
+              <option key={duration} value={duration}>
+                {duration}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="kicker text-ink-3 text-[9px]">Capacity</span>
+          <input
+            type="number"
+            min={Math.max(1, shift.filled)}
+            max={100}
+            required
+            value={form.capacity}
+            onChange={(event) => setForm({ ...form, capacity: Number(event.target.value) })}
+            className="border-ink bg-paper mt-1 w-full border-2 px-2 py-1.5 font-sans text-xs"
+          />
+        </label>
+        <div className="sm:col-span-2">
+          <button
+            type="submit"
+            disabled={update.isPending}
+            className="btn-press border-ink bg-mustard rounded-full border-2 px-4 py-2 font-sans text-[9px] font-extrabold tracking-wider uppercase disabled:opacity-40"
+          >
+            {update.isPending ? "Saving…" : "Save shift"}
+          </button>
+        </div>
+      </form>
+    </details>
   );
 }

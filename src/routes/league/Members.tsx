@@ -1,6 +1,8 @@
-import { MapPin, ShieldCheck, UserRound, Users } from "lucide-react";
+import { useState } from "react";
+import { MapPin, ShieldCheck, UserRound, Users, X } from "lucide-react";
 import { CAUSES, fmt } from "../../data";
-import { useLeagueDetail } from "../../lib/queries";
+import { activeMembership } from "../../lib/api";
+import { useLeagueDetail, useRemoveMember } from "../../lib/queries";
 import { JoinButton } from "../../components/JoinButton";
 import { SectionHead } from "../../ui";
 import { cn } from "../../utils/cn";
@@ -14,7 +16,12 @@ const ROLE_STYLE = {
 } as const;
 
 export default function LeagueMembers() {
-  const { league: l } = useLeagueContext();
+  const { league: l, edition } = useLeagueContext();
+  const membership = activeMembership(edition.me, l.id);
+  const isSteward = membership?.role === "owner" || membership?.role === "steward";
+  const removeMember = useRemoveMember();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const myProfileId = edition.me?.profile.id;
   const c = CAUSES[l.cause];
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
   const { data: detail, isPending, isError } = useLeagueDetail(l.id);
@@ -76,6 +83,11 @@ export default function LeagueMembers() {
         <ol className="divide-ink/20 border-ink divide-y-2 border-y-2">
           {members.map((member) => {
             const chapter = l.chapters.find((item) => item.id === member.chapterId);
+            const canRemove =
+              isSteward &&
+              member.profile.id !== myProfileId &&
+              member.role !== "owner" &&
+              (membership?.role === "owner" || member.role === "member");
             return (
               <li key={member.profile.id} className="flex flex-wrap items-center gap-3 py-3">
                 <span
@@ -104,6 +116,32 @@ export default function LeagueMembers() {
                 <span className="text-ink-3 font-mono text-[9px]">
                   since {new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </span>
+                {canRemove && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirmId !== member.profile.id) {
+                        setConfirmId(member.profile.id);
+                        return;
+                      }
+                      removeMember.mutate(
+                        { leagueId: l.id, profileId: member.profile.id },
+                        { onSuccess: () => setConfirmId(null) },
+                      );
+                    }}
+                    disabled={removeMember.isPending}
+                    aria-label={`Remove ${member.profile.displayName} from the roster`}
+                    className={cn(
+                      "btn-press rounded-full border-2 px-2 py-0.5 font-sans text-[8px] font-extrabold tracking-wider uppercase disabled:opacity-40",
+                      confirmId === member.profile.id
+                        ? "border-vermilion bg-vermilion text-paper"
+                        : "border-ink/25 text-ink-3 hover:border-vermilion hover:text-vermilion",
+                    )}
+                  >
+                    <X size={9} className="mr-0.5 inline" />
+                    {confirmId === member.profile.id ? "Confirm" : "Remove"}
+                  </button>
+                )}
               </li>
             );
           })}

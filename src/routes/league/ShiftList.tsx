@@ -35,9 +35,17 @@ export function ShiftList({ shifts, empty = "No shifts posted this week." }: { s
   return (
     <div className="divide-ink/20 border-ink divide-y-2 border-y-2">
       {shifts.map((s) => {
-        const meSigned = me ? isSignedUp(me, s.id) : false;
-        const full = s.filled >= s.spots && !meSigned;
-        const label = meSigned ? "You're in" : full ? "Full" : "Sign up";
+        const mySignup = me?.signups.find((signup) => signup.shiftId === s.id);
+        const waitlisted = mySignup?.status === "waitlist";
+        const meSigned = Boolean(mySignup) && !waitlisted;
+        const full = s.filled >= s.spots;
+        const label = meSigned
+          ? "You're in"
+          : waitlisted
+            ? `Waitlist${s.waitlistPosition ? ` #${s.waitlistPosition}` : ""}`
+            : full
+              ? "Join waitlist"
+              : "Sign up";
 
         return (
           <div key={s.id} className="group flex flex-wrap items-center gap-3 py-3.5 sm:flex-nowrap">
@@ -65,13 +73,14 @@ export function ShiftList({ shifts, empty = "No shifts posted this week." }: { s
                 />
               ))}
             </div>
+            {s.waitlist > 0 && <span className="text-ink-3 shrink-0 font-mono text-[9px]">{s.waitlist} waiting</span>}
             <button
               onClick={() => toggle(s)}
-              disabled={pending || full}
-              aria-pressed={meSigned}
+              disabled={pending}
+              aria-pressed={Boolean(mySignup)}
               className={cn(
                 "btn-press border-ink shrink-0 rounded-full border-2 px-3.5 py-1.5 font-sans text-[10px] font-extrabold tracking-wider uppercase disabled:cursor-not-allowed disabled:opacity-40",
-                meSigned ? "bg-ink text-paper" : "bg-mustard",
+                meSigned ? "bg-ink text-paper" : waitlisted ? "bg-paper-3 text-ink-2" : "bg-mustard",
               )}
             >
               {label}

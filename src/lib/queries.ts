@@ -166,22 +166,30 @@ export function useSignupShift() {
 
   return useMutation({
     mutationFn: (shift: ShiftDTO) =>
-      api<{ signedUp: boolean; filled: number; autoJoined: boolean }>(`/api/shifts/${shift.id}/signup`, {
-        method: "POST",
-      }),
+      api<{
+        status: "signed_up" | "waitlisted" | "already";
+        filled: number;
+        autoJoined: boolean;
+        position: number | null;
+      }>(`/api/shifts/${shift.id}/signup`, { method: "POST" }),
     onMutate: (shift) => {
+      const nextStatus = shift.filled >= shift.spots ? ("waitlist" as const) : ("reserved" as const);
       const previous = patchEdition(client, (edition) => {
         if (!edition.me) return edition;
         return {
           ...edition,
           shifts: edition.shifts.map((item) =>
-            item.id === shift.id ? { ...item, filled: Math.min(item.spots, item.filled + 1) } : item,
+            item.id === shift.id
+              ? nextStatus === "waitlist"
+                ? { ...item, waitlist: item.waitlist + 1, waitlistPosition: item.waitlist + 1 }
+                : { ...item, filled: Math.min(item.spots, item.filled + 1) }
+              : item,
           ),
           me: {
             ...edition.me,
             signups: [
               ...edition.me.signups,
-              { shiftId: shift.id, status: "reserved" as const, createdAt: new Date().toISOString() },
+              { shiftId: shift.id, status: nextStatus, createdAt: new Date().toISOString() },
             ],
           },
         };
@@ -193,7 +201,13 @@ export function useSignupShift() {
       toast(error.message);
     },
     onSuccess: (result, shift) => {
-      toast(result.autoJoined ? `Joined the league and claimed ${shift.title}` : `You're on: ${shift.title}`);
+      if (result.status === "waitlisted") {
+        toast(`Waitlisted${result.position ? ` at #${result.position}` : ""} for ${shift.title}`);
+      } else if (result.status === "already") {
+        toast(`You're already on ${shift.title}`);
+      } else {
+        toast(result.autoJoined ? `Joined the league and claimed ${shift.title}` : `You're on: ${shift.title}`);
+      }
     },
     onSettled: () => invalidateEdition(client),
   });
@@ -206,12 +220,19 @@ export function useCancelShift() {
   return useMutation({
     mutationFn: (shift: ShiftDTO) => api(`/api/shifts/${shift.id}/signup`, { method: "DELETE" }),
     onMutate: (shift) => {
+      const waitlisted =
+        client.getQueryData<EditionDTO>(KEY)?.me?.signups.find((signup) => signup.shiftId === shift.id)?.status ===
+        ("waitlist" as const);
       const previous = patchEdition(client, (edition) => {
         if (!edition.me) return edition;
         return {
           ...edition,
           shifts: edition.shifts.map((item) =>
-            item.id === shift.id ? { ...item, filled: Math.max(0, item.filled - 1) } : item,
+            item.id === shift.id
+              ? waitlisted
+                ? { ...item, waitlist: Math.max(0, item.waitlist - 1), waitlistPosition: null }
+                : { ...item, filled: Math.max(0, item.filled - 1) }
+              : item,
           ),
           me: {
             ...edition.me,
@@ -504,6 +525,76 @@ export function useRedeemInvite() {
       invalidateEdition(client);
       void client.invalidateQueries({ queryKey: ["invite"] });
       toast(result.awarded ? "You're in — charter signed" : "You're in", result.awarded ? 25 : undefined);
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export interface UpdateShiftInput {
+  shiftId: string;
+  chapterId: string;
+  title: string;
+  day: number;
+  time: string;
+  duration: string;
+  capacity: number;
+  place: string;
+  bring?: string[];
+}
+
+export function useUpdateShift() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ shiftId, ...body }: UpdateShiftInput) =>
+      api<ShiftDTO>(`/api/shifts/${shiftId}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: (shift) => {
+      invalidateEdition(client);
+      void client.invalidateQueries({ queryKey: ["roster", shift.id] });
+      toast("Shift updated");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useRemoveMember() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ leagueId, profileId }: { leagueId: string; profileId: string }) =>
+      api(`/api/leagues/${leagueId}/members/${profileId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      invalidateEdition(client);
+      toast("Member removed from the roster");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export interface LeagueSettingsInput {
+  leagueId: string;
+  name: string;
+  motto: string;
+  cause: string;
+  recruiting: boolean;
+  archived?: boolean;
+}
+
+export function useUpdateLeagueSettings() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ leagueId, ...body }: LeagueSettingsInput) =>
+      api<{ updated: true; archived: boolean }>(`/api/leagues/${leagueId}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (result) => {
+      invalidateEdition(client);
+      toast(result.archived ? "League archived" : "League settings saved");
     },
     onError: (error) => toast(error.message),
   });

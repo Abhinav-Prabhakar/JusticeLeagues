@@ -89,6 +89,7 @@ interface ShiftRow {
   base_filled: number;
   bring: string;
   signup_count: number;
+  waitlist_count: number;
 }
 
 interface WinRow {
@@ -204,17 +205,35 @@ export function listLeagues(db: Db): LeagueDTO[] {
   }));
 }
 
-export function listShifts(db: Db): ShiftDTO[] {
+export function listShifts(db: Db, profileId: string | null = null): ShiftDTO[] {
   const rows = db
     .prepare(
       `SELECT s.*,
         (SELECT COUNT(*) FROM shift_signups ss
-          WHERE ss.shift_id = s.id AND ss.status IN ${ACTIVE_SIGNUP}) AS signup_count
+          WHERE ss.shift_id = s.id AND ss.status IN ${ACTIVE_SIGNUP}) AS signup_count,
+        (SELECT COUNT(*) FROM shift_signups w
+          WHERE w.shift_id = s.id AND w.status = 'waitlist') AS waitlist_count
        FROM shifts s
        WHERE s.status IN ('open', 'full')
        ORDER BY s.starts_at`,
     )
     .all() as unknown as ShiftRow[];
+
+  const waitlistPosition = profileId
+    ? db.prepare(
+        `SELECT (SELECT COUNT(*) FROM shift_signups w
+                  WHERE w.shift_id = me.shift_id AND w.status = 'waitlist' AND w.rowid < me.rowid) + 1 AS position,
+                me.shift_id
+           FROM shift_signups me
+          WHERE me.profile_id = ? AND me.status = 'waitlist'`,
+      )
+    : null;
+  const positions = new Map<string, number>();
+  if (waitlistPosition) {
+    for (const row of waitlistPosition.all(profileId) as unknown as { shift_id: string; position: number }[]) {
+      positions.set(row.shift_id, row.position);
+    }
+  }
 
   return rows.map((row) => {
     const filled = Math.min(row.capacity, row.base_filled + row.signup_count);
@@ -230,6 +249,8 @@ export function listShifts(db: Db): ShiftDTO[] {
       place: row.place_name,
       spots: row.capacity,
       filled,
+      waitlist: row.waitlist_count,
+      waitlistPosition: positions.get(row.id) ?? null,
       bring: JSON.parse(row.bring) as ShiftDTO["bring"],
     };
   });
@@ -338,7 +359,7 @@ export function getMe(db: Db, profileId: string): MeDTO {
 export function getEdition(db: Db, profileId: string | null): EditionDTO {
   return {
     leagues: listLeagues(db),
-    shifts: listShifts(db),
+    shifts: listShifts(db, profileId),
     wins: listWins(db),
     resources: listResources(db),
     me: profileId ? getMe(db, profileId) : null,
@@ -481,11 +502,47 @@ export function leaveLeague(db: Db, profileId: string, leagueId: string): { join
   return { joined: false };
 }
 
+function waitlistPositionFor(db: Db, shiftId: string, profileId: string): number | null {
+  const row = db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM shift_signups w
+                WHERE w.shift_id = me.shift_id AND w.status = 'waitlist' AND w.rowid < me.rowid) + 1 AS position
+         FROM shift_signups me
+        WHERE me.shift_id = ? AND me.profile_id = ? AND me.status = 'waitlist'`,
+    )
+    .get(shiftId, profileId) as { position: number } | undefined;
+  return row?.position ?? null;
+}
+
+/** Move the earliest waitlisted volunteer into a free spot. Returns true if someone moved. */
+function promoteWaitlist(db: Db, shiftId: string): boolean {
+  const shift = db.prepare("SELECT capacity, base_filled, status FROM shifts WHERE id = ?").get(shiftId) as
+    { capacity: number; base_filled: number; status: string } | undefined;
+  if (!shift || shift.status !== "open") return false;
+
+  const { count } = db
+    .prepare(`SELECT COUNT(*) AS count FROM shift_signups WHERE shift_id = ? AND status IN ${ACTIVE_SIGNUP}`)
+    .get(shiftId) as { count: number };
+  if (shift.base_filled + count >= shift.capacity) return false;
+
+  const next = db
+    .prepare("SELECT profile_id FROM shift_signups WHERE shift_id = ? AND status = 'waitlist' ORDER BY rowid LIMIT 1")
+    .get(shiftId) as { profile_id: string } | undefined;
+  if (!next) return false;
+
+  db.prepare("UPDATE shift_signups SET status = 'reserved', updated_at = ? WHERE shift_id = ? AND profile_id = ?").run(
+    new Date().toISOString(),
+    shiftId,
+    next.profile_id,
+  );
+  return true;
+}
+
 export function signupShift(
   db: Db,
   profileId: string,
   shiftId: string,
-): { signedUp: true; filled: number; autoJoined: boolean } {
+): { status: "signed_up" | "waitlisted" | "already"; filled: number; autoJoined: boolean; position: number | null } {
   return transaction(db, () => {
     const shift = db
       .prepare("SELECT id, league_id, capacity, base_filled, status FROM shifts WHERE id = ?")
@@ -497,7 +554,6 @@ export function signupShift(
     const existing = db
       .prepare("SELECT status FROM shift_signups WHERE shift_id = ? AND profile_id = ?")
       .get(shiftId, profileId) as { status: string } | undefined;
-    const isActive = existing && ["reserved", "confirmed", "attended"].includes(existing.status);
 
     const { count } = db
       .prepare(
@@ -506,8 +562,22 @@ export function signupShift(
       )
       .get(shiftId) as { count: number };
 
-    if (!isActive && shift.base_filled + count >= shift.capacity) {
-      throw new AppError(409, "shift_full", "Every spot on this shift is taken.");
+    if (existing && ["reserved", "confirmed", "attended"].includes(existing.status)) {
+      return {
+        status: "already" as const,
+        filled: Math.min(shift.capacity, shift.base_filled + count),
+        autoJoined: false,
+        position: null,
+      };
+    }
+
+    if (existing?.status === "waitlist") {
+      return {
+        status: "waitlisted" as const,
+        filled: Math.min(shift.capacity, shift.base_filled + count),
+        autoJoined: false,
+        position: waitlistPositionFor(db, shiftId, profileId),
+      };
     }
 
     const member = db
@@ -519,29 +589,31 @@ export function signupShift(
       autoJoined = joinWithinTransaction(db, profileId, shift.league_id);
     }
 
-    if (!isActive) {
-      if (existing) {
-        db.prepare(
-          "UPDATE shift_signups SET status = 'reserved', created_at = ?, updated_at = ? WHERE shift_id = ? AND profile_id = ?",
-        ).run(new Date().toISOString(), new Date().toISOString(), shiftId, profileId);
-      } else {
-        db.prepare("INSERT INTO shift_signups (shift_id, profile_id, status) VALUES (?, ?, 'reserved')").run(
-          shiftId,
-          profileId,
-        );
-      }
+    const full = shift.base_filled + count >= shift.capacity;
+    const nextStatus = full ? "waitlist" : "reserved";
+
+    if (existing) {
+      // A volunteer who left and comes back goes to the back of the line:
+      // reinserting gives the row a fresh rowid, which is the queue order.
+      db.prepare("DELETE FROM shift_signups WHERE shift_id = ? AND profile_id = ?").run(shiftId, profileId);
     }
+    db.prepare("INSERT INTO shift_signups (shift_id, profile_id, status) VALUES (?, ?, ?)").run(
+      shiftId,
+      profileId,
+      nextStatus,
+    );
 
     return {
-      signedUp: true,
-      filled: Math.min(shift.capacity, shift.base_filled + count + (isActive ? 0 : 1)),
+      status: full ? ("waitlisted" as const) : ("signed_up" as const),
+      filled: Math.min(shift.capacity, shift.base_filled + count + (full ? 0 : 1)),
       autoJoined,
+      position: full ? waitlistPositionFor(db, shiftId, profileId) : null,
     };
   });
 }
 
-export function cancelShift(db: Db, profileId: string, shiftId: string): { signedUp: false } {
-  transaction(db, () => {
+export function cancelShift(db: Db, profileId: string, shiftId: string): { signedUp: false; promoted: boolean } {
+  return transaction(db, () => {
     const existing = db
       .prepare("SELECT status FROM shift_signups WHERE shift_id = ? AND profile_id = ?")
       .get(shiftId, profileId) as { status: string } | undefined;
@@ -552,14 +624,15 @@ export function cancelShift(db: Db, profileId: string, shiftId: string): { signe
     const result = db
       .prepare(
         `UPDATE shift_signups SET status = 'cancelled', updated_at = ?
-          WHERE shift_id = ? AND profile_id = ? AND status IN ${ACTIVE_SIGNUP}`,
+          WHERE shift_id = ? AND profile_id = ? AND status IN ('reserved','confirmed','waitlist')`,
       )
       .run(new Date().toISOString(), shiftId, profileId);
     if (Number(result.changes) === 0) {
       throw new AppError(409, "not_signed_up", "You are not on this shift.");
     }
+
+    return { signedUp: false as const, promoted: existing?.status !== "waitlist" && promoteWaitlist(db, shiftId) };
   });
-  return { signedUp: false };
 }
 
 /** "2h" → 2, "1.5h" → 1.5. Seeded shifts all carry an hour suffix. */
@@ -643,6 +716,8 @@ function readRoster(db: Db, shiftId: string): ShiftRosterDTO {
       place: shift.place_name,
       spots: shift.capacity,
       filled: Math.min(shift.capacity, shift.base_filled + count),
+      waitlist: rows.filter((row) => row.status === "waitlist").length,
+      waitlistPosition: null,
       bring: JSON.parse(shift.bring) as ShiftDTO["bring"],
     },
     pointsPerHour: ATTENDANCE_POINTS_PER_HOUR,
@@ -689,7 +764,7 @@ export function checkInShift(
     if (signup.status === "attended") {
       return { awarded: 0, roster: readRoster(db, shiftId) };
     }
-    if (!["reserved", "confirmed", "waitlist", "no_show"].includes(signup.status)) {
+    if (!["reserved", "confirmed", "no_show"].includes(signup.status)) {
       throw new AppError(409, "not_signed_up", "That volunteer is no longer on this shift.");
     }
 
@@ -767,6 +842,63 @@ export function createShift(db: Db, actorId: string, leagueId: string, input: Cr
     const shift = listShifts(db).find((item) => item.id === id);
     if (!shift) throw new Error("The new shift could not be read back.");
     return shift;
+  });
+}
+
+export function updateShift(db: Db, actorId: string, shiftId: string, input: CreateShiftInput): ShiftDTO {
+  return transaction(db, () => {
+    const shift = db
+      .prepare("SELECT league_id, capacity, base_filled, status FROM shifts WHERE id = ?")
+      .get(shiftId) as { league_id: string; capacity: number; base_filled: number; status: string } | undefined;
+    if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
+    assertSteward(db, actorId, shift.league_id);
+    if (shift.status !== "open" && shift.status !== "full") {
+      throw new AppError(409, "shift_closed", "That shift is already closed. Post a new one instead.");
+    }
+
+    const chapter = db
+      .prepare("SELECT id FROM chapters WHERE id = ? AND league_id = ?")
+      .get(input.chapterId, shift.league_id) as { id: string } | undefined;
+    if (!chapter) {
+      throw new AppError(400, "invalid_chapter", "That chapter is not part of this league.");
+    }
+
+    const { count } = db
+      .prepare(`SELECT COUNT(*) AS count FROM shift_signups WHERE shift_id = ? AND status IN ${ACTIVE_SIGNUP}`)
+      .get(shiftId) as { count: number };
+    if (shift.base_filled + count > input.capacity) {
+      throw new AppError(
+        409,
+        "capacity_below_signups",
+        `${shift.base_filled + count} spots are already taken. Raise the capacity instead.`,
+      );
+    }
+
+    db.prepare(
+      `UPDATE shifts
+          SET chapter_id = ?, title = ?, day = ?, starts_at = ?, duration = ?,
+              place_name = ?, capacity = ?, bring = ?, updated_at = ?
+        WHERE id = ?`,
+    ).run(
+      chapter.id,
+      input.title,
+      input.day,
+      shiftStart(input.day, input.time),
+      input.duration,
+      input.place,
+      input.capacity,
+      JSON.stringify(input.bring ?? []),
+      new Date().toISOString(),
+      shiftId,
+    );
+
+    while (promoteWaitlist(db, shiftId)) {
+      // A capacity increase can reopen more than one seat.
+    }
+
+    const updated = listShifts(db).find((item) => item.id === shiftId);
+    if (!updated) throw new Error("The edited shift could not be read back.");
+    return updated;
   });
 }
 
@@ -1339,5 +1471,78 @@ export function redeemInvite(
     );
 
     return { leagueId: row.league_id, role, awarded };
+  });
+}
+
+export function removeMember(db: Db, actorId: string, leagueId: string, profileId: string): { removed: true } {
+  return transaction(db, () => {
+    assertSteward(db, actorId, leagueId);
+    const actor = db
+      .prepare("SELECT role FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
+      .get(leagueId, actorId) as { role: string } | undefined;
+    const target = db
+      .prepare("SELECT role, status FROM league_members WHERE league_id = ? AND profile_id = ?")
+      .get(leagueId, profileId) as { role: string; status: string } | undefined;
+
+    if (!target || target.status !== "active") {
+      throw new AppError(404, "member_not_found", "That member is not on the active roster.");
+    }
+    if (target.role === "owner") {
+      throw new AppError(409, "cannot_remove_owner", "The owner cannot be removed from their own league.");
+    }
+    if (actorId === profileId) {
+      throw new AppError(409, "cannot_remove_self", "Use Leave league to step off the roster.");
+    }
+    if (actor?.role === "steward" && target.role === "steward") {
+      throw new AppError(403, "owner_required", "Only the owner can remove another steward.");
+    }
+
+    db.prepare("UPDATE league_members SET status = 'left' WHERE league_id = ? AND profile_id = ?").run(
+      leagueId,
+      profileId,
+    );
+    return { removed: true as const };
+  });
+}
+
+export interface LeagueSettingsInput {
+  name: string;
+  motto: string;
+  cause: Cause;
+  recruiting: boolean;
+  archived?: boolean;
+}
+
+export function updateLeagueSettings(
+  db: Db,
+  actorId: string,
+  leagueId: string,
+  input: LeagueSettingsInput,
+): { updated: true; archived: boolean } {
+  return transaction(db, () => {
+    assertSteward(db, actorId, leagueId);
+    const actor = db
+      .prepare("SELECT role FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
+      .get(leagueId, actorId) as { role: string } | undefined;
+
+    if (input.archived && actor?.role !== "owner") {
+      throw new AppError(403, "owner_required", "Only the league owner can archive it.");
+    }
+
+    db.prepare(
+      `UPDATE leagues
+          SET name = ?, motto = ?, cause = ?, recruiting = ?, status = ?, updated_at = ?
+        WHERE id = ?`,
+    ).run(
+      input.name,
+      input.motto,
+      input.cause,
+      input.archived ? 0 : input.recruiting ? 1 : 0,
+      input.archived ? "archived" : "active",
+      new Date().toISOString(),
+      leagueId,
+    );
+
+    return { updated: true as const, archived: Boolean(input.archived) };
   });
 }

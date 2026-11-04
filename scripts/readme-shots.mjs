@@ -147,6 +147,11 @@ await steward.evaluate(() => window.scrollBy(0, -90));
 await steward.waitForTimeout(500);
 await steward.screenshot({ path: `${outDir}/projects.png` });
 console.log("captured projects (review desk)");
+
+// The masthead settings, with the owner signed in.
+await steward.goto(`${base}/leagues/harbor/settings`);
+await steward.getByRole("heading", { name: /league settings/i }).waitFor();
+await shoot(steward, "settings", true);
 await stewardContext.close();
 
 // Mobile viewports.

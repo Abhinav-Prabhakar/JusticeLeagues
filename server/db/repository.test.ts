@@ -27,10 +27,13 @@ import {
   listWins,
   previewInvite,
   redeemInvite,
+  removeMember,
   releaseResource,
   reviewProject,
   signupShift,
   submitProject,
+  updateLeagueSettings,
+  updateShift,
 } from "./repository";
 import { projectPoints } from "../../src/data/projects";
 
@@ -122,7 +125,7 @@ describe("membership", () => {
 });
 
 describe("shift capacity", () => {
-  it("never oversells and lets a cancellation free a spot", () => {
+  it("never oversells, waitlists the overflow, and promotes the first in line", () => {
     const shift = listShifts(db).find((item) => item.id === "s12")!;
     const open = shift.spots - shift.filled;
     expect(open).toBe(3);
@@ -130,26 +133,67 @@ describe("shift capacity", () => {
     for (let i = 0; i < open; i++) {
       const id = `usr_cap_${i}`;
       makeProfile(id);
-      signupShift(db, id, "s12");
+      expect(signupShift(db, id, "s12").status).toBe("signed_up");
     }
 
     makeProfile("usr_late");
-    try {
-      signupShift(db, "usr_late", "s12");
-      throw new Error("expected the shift to be full");
-    } catch (error) {
-      expect(error).toBeInstanceOf(AppError);
-      expect((error as AppError).code).toBe("shift_full");
+    const late = signupShift(db, "usr_late", "s12");
+    expect(late).toMatchObject({ status: "waitlisted", filled: shift.spots, position: 1 });
+    makeProfile("usr_later");
+    expect(signupShift(db, "usr_later", "s12").position).toBe(2);
+
+    expect(listShifts(db).find((item) => item.id === "s12")?.waitlist).toBe(2);
+    expect(listShifts(db, "usr_late").find((item) => item.id === "s12")?.waitlistPosition).toBe(1);
+
+    const cancelled = cancelShift(db, "usr_cap_0", "s12");
+    expect(cancelled.promoted).toBe(true);
+    const promoted = getMe(db, "usr_late").signups.find((signup) => signup.shiftId === "s12")!;
+    expect(promoted.status).toBe("reserved");
+    expect(signupShift(db, "usr_late", "s12").status).toBe("already");
+
+    cancelShift(db, "usr_late", "s12");
+    expect(getMe(db, "usr_later").signups.find((signup) => signup.shiftId === "s12")?.status).toBe("reserved");
+  });
+
+  it("lets a waitlisted volunteer leave without taking a spot", () => {
+    const shift = listShifts(db).find((item) => item.id === "s12")!;
+    for (let i = 0; i < shift.spots - shift.filled; i++) {
+      const id = `usr_fill_${i}`;
+      makeProfile(id);
+      signupShift(db, id, "s12");
+    }
+    makeProfile("usr_wait");
+    signupShift(db, "usr_wait", "s12");
+    expect(cancelShift(db, "usr_wait", "s12")).toMatchObject({ signedUp: false, promoted: false });
+    expect(getMe(db, "usr_wait").signups.some((signup) => signup.shiftId === "s12")).toBe(false);
+  });
+
+  it("sends a returning volunteer to the back of the waitlist", () => {
+    const shift = listShifts(db).find((item) => item.id === "s12")!;
+    for (let i = 0; i < shift.spots - shift.filled; i++) {
+      const id = `usr_queue_fill_${i}`;
+      makeProfile(id);
+      signupShift(db, id, "s12");
     }
 
-    cancelShift(db, "usr_cap_0", "s12");
-    expect(signupShift(db, "usr_late", "s12").signedUp).toBe(true);
+    makeProfile("usr_queue_a");
+    expect(signupShift(db, "usr_queue_a", "s12").position).toBe(1);
+    makeProfile("usr_queue_b");
+    expect(signupShift(db, "usr_queue_b", "s12").position).toBe(2);
+
+    cancelShift(db, "usr_queue_a", "s12");
+    expect(signupShift(db, "usr_queue_a", "s12").position).toBe(2);
+
+    cancelShift(db, "usr_queue_a", "s12");
+    cancelShift(db, "usr_queue_b", "s12");
   });
 
   it("treats a repeat signup as a no-op", () => {
     makeProfile("usr_e");
     const first = signupShift(db, "usr_e", "s11");
     const second = signupShift(db, "usr_e", "s11");
+    expect(first.status).toBe("signed_up");
+    expect(second.status).toBe("already");
     expect(second.filled).toBe(first.filled);
     expect(getMe(db, "usr_e").signups).toHaveLength(1);
   });
@@ -538,5 +582,137 @@ describe("invitations", () => {
     expect(() => createInvite(db, STEWARD, "harbor", { role: "member", chapterId: "ch_spoke" })).toThrowError(
       /chapter/,
     );
+  });
+});
+
+describe("steward shift editing", () => {
+  const OWNER = "usr_seed_harbor_1";
+
+  it("edits a shift and promotes waitlisted volunteers when capacity grows", () => {
+    const shift = listShifts(db).find((item) => item.id === "s12")!;
+    for (let i = 0; i < shift.spots - shift.filled; i++) {
+      makeProfile(`usr_edit_fill_${i}`);
+      signupShift(db, `usr_edit_fill_${i}`, "s12");
+    }
+    makeProfile("usr_edit_wait");
+    expect(signupShift(db, "usr_edit_wait", "s12").status).toBe("waitlisted");
+
+    const updated = updateShift(db, OWNER, "s12", {
+      chapterId: "ch_harbor_2",
+      title: "Riverfront tree planting",
+      day: 5,
+      time: "09:30",
+      duration: "3h",
+      capacity: shift.spots + 1,
+      place: "East bank footbridge",
+    });
+    expect(updated).toMatchObject({
+      title: "Riverfront tree planting",
+      chapterId: "ch_harbor_2",
+      time: "09:30",
+      dur: "3h",
+      place: "East bank footbridge",
+      spots: shift.spots + 1,
+    });
+    expect(updated.waitlist).toBe(0);
+    expect(getMe(db, "usr_edit_wait").signups.find((signup) => signup.shiftId === "s12")?.status).toBe("reserved");
+  });
+
+  it("refuses a capacity below the spots already taken, and non-stewards", () => {
+    expect(() =>
+      updateShift(db, OWNER, "s12", {
+        chapterId: "ch_harbor",
+        title: "Too small",
+        day: 5,
+        time: "10:00",
+        duration: "2h",
+        capacity: 2,
+        place: "Nowhere",
+      }),
+    ).toThrowError(/already taken/);
+
+    makeProfile("usr_plain");
+    expect(() =>
+      updateShift(db, "usr_plain", "s12", {
+        chapterId: "ch_harbor",
+        title: "Nope",
+        day: 5,
+        time: "10:00",
+        duration: "2h",
+        capacity: 20,
+        place: "Nowhere",
+      }),
+    ).toThrowError(/steward/);
+  });
+});
+
+describe("roster removal", () => {
+  it("lets an owner remove a member but protects the owner and other stewards", () => {
+    makeProfile("usr_member");
+    joinLeague(db, "usr_member", "harbor");
+
+    expect(removeMember(db, "usr_seed_harbor_1", "harbor", "usr_member")).toEqual({ removed: true });
+    expect(listMembers(db, "harbor").some((member) => member.profile.id === "usr_member")).toBe(false);
+
+    expect(() => removeMember(db, "usr_seed_harbor_1", "harbor", "usr_seed_harbor_1")).toThrowError(
+      /owner cannot be removed/,
+    );
+    expect(() => removeMember(db, "usr_seed_harbor_2", "harbor", "usr_seed_harbor_1")).toThrowError(
+      /owner cannot be removed/,
+    );
+    expect(() => removeMember(db, "usr_seed_harbor_2", "harbor", "usr_seed_harbor_3")).toThrowError(/Only the owner/);
+    expect(removeMember(db, "usr_seed_harbor_1", "harbor", "usr_seed_harbor_2")).toEqual({ removed: true });
+  });
+});
+
+describe("league settings", () => {
+  it("updates identity and recruiting, and only the owner can archive", () => {
+    expect(
+      updateLeagueSettings(db, "usr_seed_harbor_1", "harbor", {
+        name: "Harbor & Mill River Coalition",
+        motto: "Leave the water better than we found it.",
+        cause: "climate",
+        recruiting: false,
+      }),
+    ).toEqual({ updated: true, archived: false });
+
+    const harbor = listLeagues(db).find((league) => league.id === "harbor")!;
+    expect(harbor).toMatchObject({
+      name: "Harbor & Mill River Coalition",
+      motto: "Leave the water better than we found it.",
+      recruiting: false,
+    });
+
+    expect(() =>
+      updateLeagueSettings(db, "usr_seed_harbor_2", "harbor", {
+        name: "Harbor & Mill River Coalition",
+        motto: "Leave the water better than we found it.",
+        cause: "climate",
+        recruiting: false,
+        archived: true,
+      }),
+    ).toThrowError(/Only the league owner/);
+
+    updateLeagueSettings(db, "usr_seed_harbor_1", "harbor", {
+      name: "Harbor & Mill River Coalition",
+      motto: "Leave the water better than we found it.",
+      cause: "climate",
+      recruiting: false,
+      archived: true,
+    });
+    expect(listLeagues(db).some((league) => league.id === "harbor")).toBe(false);
+  });
+
+  it("keeps settings behind the steward desk", () => {
+    makeProfile("usr_plain");
+    joinLeague(db, "usr_plain", "harbor");
+    expect(() =>
+      updateLeagueSettings(db, "usr_plain", "harbor", {
+        name: "Hijacked",
+        motto: "No.",
+        cause: "food",
+        recruiting: true,
+      }),
+    ).toThrowError(/steward/);
   });
 });

@@ -8,21 +8,31 @@ import { seedIfEmpty } from "./db/seed";
 let db: Db;
 let app: ReturnType<typeof createApp>;
 
-async function post(path: string, body: unknown, cookie?: string) {
+async function post(path: string, body: unknown, cookie?: string, headers: Record<string, string> = {}) {
   return app.request(path, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}), ...headers },
     body: JSON.stringify(body),
   });
 }
 
+let registrationCount = 0;
+
 async function register(email = "ada@example.com", displayName = "Ada Lovelace") {
-  const response = await post("/api/auth/register", {
-    displayName,
-    email,
-    password: "correct horse battery",
-    causes: ["climate"],
-  });
+  // Each registration gets its own limiter bucket so a long suite never trips
+  // the per-IP ceiling; the limiter itself is covered by its own unit test.
+  registrationCount += 1;
+  const response = await post(
+    "/api/auth/register",
+    {
+      displayName,
+      email,
+      password: "correct horse battery",
+      causes: ["climate"],
+    },
+    undefined,
+    { "x-forwarded-for": `10.0.0.${registrationCount}` },
+  );
   const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
   const payload = (await response.clone().json()) as { me?: { profile: { id: string } } };
   return { response, cookie, profileId: payload.me?.profile.id ?? "" };
@@ -421,5 +431,110 @@ describe("invite API", () => {
     const stewardCookie = await loginSteward();
     const invalid = await post("/api/leagues/harbor/invites", { role: "owner" }, stewardCookie);
     expect(invalid.status).toBe(400);
+  });
+});
+
+describe("steward editing API", () => {
+  async function loginSteward(email = "steward.harbor.1@justiceleagues.local") {
+    const response = await post("/api/auth/login", { email, password: "millbrook" });
+    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+  }
+
+  const shiftBody = {
+    chapterId: "ch_harbor_2",
+    title: "Riverfront tree planting",
+    day: 5,
+    time: "09:30",
+    duration: "3h",
+    capacity: 22,
+    place: "East bank footbridge",
+  };
+
+  it("edits a shift and refuses a capacity below the signups", async () => {
+    const stewardCookie = await loginSteward();
+    const edited = await app.request("/api/shifts/s12", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: stewardCookie },
+      body: JSON.stringify(shiftBody),
+    });
+    const editedPayload = await edited.json();
+    expect(edited.status, JSON.stringify(editedPayload)).toBe(200);
+    expect(editedPayload).toMatchObject({ title: "Riverfront tree planting", spots: 22, time: "09:30" });
+
+    const tooSmall = await app.request("/api/shifts/s12", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: stewardCookie },
+      body: JSON.stringify({ ...shiftBody, capacity: 2 }),
+    });
+    expect(tooSmall.status).toBe(409);
+    expect(((await tooSmall.json()) as { code: string }).code).toBe("capacity_below_signups");
+
+    const denied = await app.request("/api/shifts/s12", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(shiftBody),
+    });
+    expect(denied.status).toBe(401);
+  });
+
+  it("removes a member and updates the masthead", async () => {
+    const member = await register("remove-me@example.com", "Remove Me");
+    await post("/api/leagues/harbor/join", {}, member.cookie);
+    const stewardCookie = await loginSteward();
+
+    const removed = await app.request("/api/leagues/harbor/members/" + member.profileId, {
+      method: "DELETE",
+      headers: { cookie: stewardCookie },
+    });
+    expect(removed.status).toBe(200);
+    const detail = (await (await app.request("/api/leagues/harbor")).json()) as {
+      members: { profile: { id: string } }[];
+    };
+    expect(detail.members.some((entry) => entry.profile.id === member.profileId)).toBe(false);
+
+    const saved = await app.request("/api/leagues/harbor/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: stewardCookie },
+      body: JSON.stringify({
+        name: "Harbor & Mill River Coalition",
+        motto: "Leave the water better than we found it.",
+        cause: "climate",
+        recruiting: false,
+      }),
+    });
+    expect(saved.status).toBe(200);
+    const edition = (await (await app.request("/api/edition")).json()) as {
+      leagues: { id: string; name: string; recruiting: boolean }[];
+    };
+    expect(edition.leagues.find((league) => league.id === "harbor")).toMatchObject({
+      name: "Harbor & Mill River Coalition",
+      recruiting: false,
+    });
+
+    const settings = {
+      name: "Harbor & Mill River Coalition",
+      motto: "Leave the water better than we found it.",
+      cause: "climate",
+      recruiting: false,
+      archived: true,
+    };
+
+    const stewardCookie2 = await loginSteward("steward.harbor.2@justiceleagues.local");
+    const denied = await app.request("/api/leagues/harbor/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: stewardCookie2 },
+      body: JSON.stringify(settings),
+    });
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as { code: string }).code).toBe("owner_required");
+
+    const archived = await app.request("/api/leagues/harbor/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: stewardCookie },
+      body: JSON.stringify(settings),
+    });
+    expect(archived.status).toBe(200);
+    const after = (await (await app.request("/api/edition")).json()) as { leagues: { id: string }[] };
+    expect(after.leagues.some((league) => league.id === "harbor")).toBe(false);
   });
 });

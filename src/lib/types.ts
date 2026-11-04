@@ -44,6 +44,9 @@ export interface ShiftDTO {
   place: string;
   spots: number;
   filled: number;
+  waitlist: number;
+  /** One-based place in this shift's waitlist, when you are on it. */
+  waitlistPosition: number | null;
   bring: Bring[];
 }
 

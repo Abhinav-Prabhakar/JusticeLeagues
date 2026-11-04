@@ -36,11 +36,14 @@ import {
   listMembers,
   listProjects,
   previewInvite,
+  removeMember,
   redeemInvite,
   releaseResource,
   reviewProject,
   signupShift,
   submitProject,
+  updateLeagueSettings,
+  updateShift,
 } from "./db/repository";
 import { newId } from "./db";
 
@@ -95,6 +98,14 @@ const projectSchema = z.object({
 
 const reviewSchema = z.object({
   decision: z.enum(["approve", "reject"]),
+});
+
+const settingsSchema = z.object({
+  name: z.string().trim().min(3).max(80),
+  motto: z.string().trim().max(120),
+  cause: z.enum(CAUSE_VALUES),
+  recruiting: z.boolean(),
+  archived: z.boolean().optional(),
 });
 
 const inviteSchema = z.object({
@@ -236,6 +247,29 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
   app.get("/api/shifts/:id/roster", auth(), (c) => {
     const profile = c.get("profile")!;
     return c.json(getShiftRoster(db, profile.id, c.req.param("id")));
+  });
+
+  app.patch("/api/shifts/:id", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = shiftSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the shift details and try again.", code: "invalid_input" }, 400);
+    }
+    return c.json(updateShift(db, profile.id, c.req.param("id"), parsed.data));
+  });
+
+  app.delete("/api/leagues/:id/members/:profileId", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json(removeMember(db, profile.id, c.req.param("id"), c.req.param("profileId")));
+  });
+
+  app.patch("/api/leagues/:id/settings", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    const parsed = settingsSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Check the league details and try again.", code: "invalid_input" }, 400);
+    }
+    return c.json(updateLeagueSettings(db, profile.id, c.req.param("id"), parsed.data));
   });
 
   app.post("/api/shifts/:id/check-in", auth(), async (c) => {

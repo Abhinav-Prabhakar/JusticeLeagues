@@ -5,6 +5,7 @@ import {
   Compass,
   LayoutGrid,
   MapPin,
+  Settings2,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -31,6 +32,7 @@ const TABS = [
 ];
 
 const STEWARD_TAB = { to: "steward", label: "Steward", icon: ShieldCheck, end: false };
+const SETTINGS_TAB = { to: "settings", label: "Settings", icon: Settings2, end: false };
 
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>();
@@ -57,7 +59,7 @@ export default function LeaguePage() {
 
   const c = CAUSES[l.cause];
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
-  const tabs = isSteward ? [...TABS, STEWARD_TAB] : TABS;
+  const tabs = isSteward ? [...TABS, STEWARD_TAB, SETTINGS_TAB] : TABS;
   const myChapter = l.chapters.find((chapter) => chapter.id === membership?.chapterId);
   const rank = [...data.leagues].sort((a, b) => b.points - a.points).findIndex((x) => x.id === l.id) + 1;
   const context: LeagueContextValue = { league: l, edition: data };

@@ -1,9 +1,10 @@
 # Justice Leagues — Prototype → Production Plan
 
-Status: **Phase 2 in progress**. The SQLite substrate, local auth, persisted
+Status: **Phase 2 complete**. The SQLite substrate, local auth, persisted
 signups, neighbourhood chapters, the tabbed league shell, steward check-in,
-steward shift authoring, project approval, the resource exchange, and chapter
-invitations are real. Shift waitlists/editing and the standings cache remain.
+steward shift authoring, shift waitlists and editing, project approval, the
+resource exchange, chapter invitations, member removal, and league settings are
+real. Standings cache and the server-side leaderboard are Phase 3.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -231,22 +232,23 @@ refresh, and the app runs with no network (fonts and photography are local).
 hours, project approval, chapter switcher, member roster roles, and the
 standings cache. Those are Phase 2/3 and are the next points of leverage.
 
-### Phase 2 — League + chapter dashboards (2–3 weeks)
+### Phase 2 — League + chapter dashboards (2–3 weeks) — **complete**
 
 The core product. A real route, not a drawer.
 
 - `LeagueShell`: league masthead, cause emblem, role badge, chapter switcher,
   tab nav (Overview · Shifts · Chapters · Members · Resources · Impact · Settings).
-  ✅ Overview · Shifts · Chapters · Members · Resources · Impact · Steward (role-gated).
+  ✅ Overview · Shifts · Chapters · Members · Resources · Impact · Steward and
+  Settings (role-gated).
 - Chapter model in the UI: a citywide league rolls up N neighbourhood chapters;
   every shift, resource, and project is filed under a chapter. ✅
 - Overview: next shift, fill rate, active members, points sparkline, recent win. ✅
 - Shifts: create/edit/cancel; capacity + waitlist; signup; steward check-in;
-  attendance → hours → points. ✅ create/cancel, capacity, signup, check-in,
-  hours → points; waitlist and edit still open.
+  attendance → hours → points. ✅ create/edit/cancel, capacity, signup,
+  waitlist promotion, check-in, hours → points.
 - Members: roster, roles (owner/steward/member), chapter assignment, invite by
-  local link token, remove. ✅ roster, roles, home-chapter assignment, and
-  single-use member/steward invites; removal still open.
+  local link token, remove. ✅ roster, roles, home-chapter assignment,
+  single-use member/steward invites, steward/owner removal rules.
 - Resources: post offer/want, claim, fulfil, expire; photo optional.
   ✅ post offer/want, claim, release, fulfil, expire, claim history; photos still
   open.
@@ -254,10 +256,11 @@ The core product. A real route, not a drawer.
   approval triggers points and a public win card. ✅ 50–500 JP by metrics;
   rejection mints nothing; chapter rollups include approved projects.
 - Settings: league identity, cause, city, recruiting toggle, archive.
+  ✅ stewards edit identity/cause/recruiting; only the owner archives.
 
-**Exit:** a real league with two chapters can run one full week — publish shift
-→ fill it → check in → log hours → approve a project → see points and rank
-update at both chapter and league level.
+**Exit:** met — a real league with two chapters can run one full week: publish
+shift → fill it → waitlist a neighbour → check in → log hours → approve a
+project → see points and rank update at both chapter and league level.
 
 ### Phase 3 — Standings, impact, and anti-gaming (1–2 weeks)
 
@@ -393,7 +396,8 @@ rollback plan.
 12. Replace the single league page with a tabbed shell and a public roster. ✅
 13. Add steward check-in (hours → ledger) and steward-authored shifts. ✅
 14. Ship project approval with evidence. ✅
-15. Next: shift waitlists/editing, standings cache.
+15. Ship shift waitlists/editing, member removal, and league settings. ✅
+16. Next: `league_standings` cache and the server-side leaderboard (Phase 3).
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded.

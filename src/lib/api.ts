@@ -57,6 +57,8 @@ export function initialEdition(): EditionDTO {
       ...shift,
       chapterId: `ch_${shift.league}`,
       startsAt: start.toISOString(),
+      waitlist: 0,
+      waitlistPosition: null,
     };
   });
 

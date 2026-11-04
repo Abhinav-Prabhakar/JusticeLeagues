@@ -162,7 +162,10 @@ export function Dispatch() {
             if (!l) return null;
             const c = CAUSES[l.cause];
             const Icon = c.icon;
-            const meSigned = me ? isSignedUp(me, s.id) : false;
+            const mySignup = me?.signups.find((signup) => signup.shiftId === s.id);
+            const meWaitlisted = mySignup?.status === "waitlist";
+            const meSigned = Boolean(mySignup) && !meWaitlisted;
+            const full = s.filled >= s.spots;
             const filled = s.filled;
             return (
               <article
@@ -202,13 +205,13 @@ export function Dispatch() {
                       onClick={() => toggleShift(s)}
                       className={cn(
                         "btn-press border-ink flex shrink-0 items-center gap-1.5 rounded-full border-2 px-3.5 py-2 font-sans text-[11px] font-extrabold tracking-wider uppercase",
-                        meSigned ? "bg-ink text-paper" : "bg-mustard",
+                        meSigned ? "bg-ink text-paper" : meWaitlisted ? "bg-paper-3 text-ink-2" : "bg-mustard",
                       )}
                     >
                       <span key={String(meSigned)} className="animate-pop">
                         {meSigned ? <Check size={13} strokeWidth={3} /> : <UserRound size={13} strokeWidth={2.6} />}
                       </span>
-                      {meSigned ? "In" : "Sign up"}
+                      {meSigned ? "In" : meWaitlisted ? "Waitlist" : full ? "Waitlist" : "Sign up"}
                     </button>
                   </div>
                   <div className="mt-2.5 flex flex-wrap items-center gap-[5px]">
@@ -227,7 +230,11 @@ export function Dispatch() {
                       />
                     ))}
                     <span className="text-ink-3 ml-1.5 font-mono text-[10px] font-semibold">
-                      {s.spots - filled === 0 ? "Full" : `${s.spots - filled} left`}
+                      {s.spots - filled === 0
+                        ? s.waitlist > 0
+                          ? `Full · ${s.waitlist} waiting`
+                          : "Full"
+                        : `${s.spots - filled} left`}
                     </span>
                   </div>
                   <div className="expand">
