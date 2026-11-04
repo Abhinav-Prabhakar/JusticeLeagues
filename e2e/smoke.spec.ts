@@ -42,6 +42,7 @@ test("no horizontal overflow at phone widths", async ({ page }) => {
     for (const path of [
       "/",
       "/leagues",
+      "/ledger",
       "/leagues/harbor",
       "/leagues/harbor/shifts",
       "/leagues/harbor/chapters",
