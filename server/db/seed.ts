@@ -10,6 +10,9 @@ import {
 import { hashPassword } from "../auth/password";
 import { transaction, type Db } from "./index";
 import { shiftStart } from "./schedule";
+import { seedBadges } from "./badges";
+import { materializeSealedLedger } from "./sealed";
+import { rebuildStandings } from "./standings";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
 
@@ -26,6 +29,7 @@ export function seedIfEmpty(db: Db): boolean {
   if (count > 0) return false;
 
   transaction(db, () => {
+    seedBadges(db);
     db.prepare("INSERT INTO cities (id, name, slug, center_lat, center_lng) VALUES (?, ?, ?, ?, ?)").run(
       CITY.id,
       CITY.name,
@@ -98,6 +102,10 @@ export function seedIfEmpty(db: Db): boolean {
       INSERT INTO league_members (league_id, profile_id, chapter_id, role, status, joined_at)
       VALUES (?, ?, ?, ?, 'active', ?)
     `);
+    const insertCharterBadge = db.prepare(`
+      INSERT OR IGNORE INTO profile_badges (profile_id, badge_key, league_id, awarded_at)
+      VALUES (?, 'charter_steward', ?, ?)
+    `);
 
     for (const league of LEAGUES) {
       const chapters = demoChapters(league);
@@ -113,6 +121,7 @@ export function seedIfEmpty(db: Db): boolean {
           JSON.stringify([league.cause]),
         );
         insertDemoMembership.run(league.id, member.profile.id, member.chapterId, member.role, member.joinedAt);
+        insertCharterBadge.run(member.profile.id, league.id, member.joinedAt);
       }
     }
 
@@ -185,7 +194,25 @@ export function seedIfEmpty(db: Db): boolean {
         new Date(now - (ago[win.when] ?? 0)).toISOString(),
       );
     }
+
+    // Phase 3: sealed history becomes ledger rows, then the standings cache
+    // is built inside the same transaction as the seed.
+    materializeSealedLedger(db);
+    rebuildStandings(db);
   });
 
   return true;
+}
+
+/**
+ * Startup/backfill hook for databases seeded before Phase 3. Idempotent:
+ * sealed rows are keyed by chapter and week, badges by profile and key.
+ */
+export function ensurePhase3(db: Db): { inserted: number } {
+  return transaction(db, () => {
+    seedBadges(db);
+    const inserted = materializeSealedLedger(db);
+    rebuildStandings(db);
+    return { inserted };
+  });
 }

@@ -69,6 +69,8 @@ describe("JoinButton", () => {
       signups: [],
       points: 25,
       ledger: [],
+      badges: [],
+      streak: { current: 0, longest: 0, weekActive: false },
     };
     edition.me = me;
 

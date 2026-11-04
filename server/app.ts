@@ -32,6 +32,7 @@ import {
   getShiftRoster,
   joinLeague,
   leaveLeague,
+  listLeagueAnomalies,
   listLeagues,
   listMembers,
   listProjects,
@@ -39,13 +40,20 @@ import {
   removeMember,
   redeemInvite,
   releaseResource,
+  resolveLeagueAnomaly,
+  reverseLedgerEntry,
   reviewProject,
   signupShift,
   submitProject,
   updateLeagueSettings,
   updateShift,
 } from "./db/repository";
+import { listStandings } from "./db/standings";
+import { getImpact } from "./db/impact";
+import { listPublicLedger } from "./db/ledger";
 import { newId } from "./db";
+import type { Cause } from "../src/data/fixtures";
+import type { StandingsScope } from "../src/lib/types";
 
 type Variables = { profile: SessionUser | null };
 
@@ -98,6 +106,32 @@ const projectSchema = z.object({
 
 const reviewSchema = z.object({
   decision: z.enum(["approve", "reject"]),
+});
+
+const standingsSchema = z.object({
+  scope: z.enum(["global", "city", "cause", "chapter", "month"]).default("global"),
+  cause: z.enum([...CAUSE_VALUES, "all"]).default("all"),
+  city: z.string().trim().max(80).optional(),
+  league: z.string().trim().max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+const ledgerQuerySchema = z.object({
+  league: z.string().trim().max(80).optional(),
+  type: z.string().trim().max(40).optional(),
+  profile: z.string().trim().max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+const anomalyResolveSchema = z.object({
+  decision: z.enum(["clear", "reverse"]),
+  note: z.string().trim().max(300).optional(),
+});
+
+const reverseSchema = z.object({
+  note: z.string().trim().max(300).optional(),
 });
 
 const settingsSchema = z.object({
@@ -195,6 +229,49 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
   });
 
   app.get("/api/edition", (c) => c.json(getEdition(db, c.get("profile")?.id ?? null)));
+
+  app.get("/api/standings", (c) => {
+    const parsed = standingsSchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: "Check the leaderboard filters.", code: "invalid_query" }, 400);
+    }
+    const { scope, cause, city, league, limit, offset } = parsed.data;
+    return c.json(
+      listStandings(db, {
+        scope: scope as StandingsScope,
+        cause: cause as Cause | "all",
+        cityId: city ?? null,
+        leagueId: league ?? null,
+        limit,
+        offset,
+      }),
+    );
+  });
+
+  app.get("/api/impact", (c) => c.json(getImpact(db)));
+
+  app.get("/api/leagues/:id/impact", (c) => {
+    const league = listLeagues(db).find((item) => item.id === c.req.param("id") || item.slug === c.req.param("id"));
+    if (!league) return c.json({ error: "League not found.", code: "league_not_found" }, 404);
+    return c.json(getImpact(db, league.id));
+  });
+
+  app.get("/api/ledger", (c) => {
+    const parsed = ledgerQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: "Check the ledger filters.", code: "invalid_query" }, 400);
+    }
+    const { league, type, profile, limit, offset } = parsed.data;
+    return c.json(
+      listPublicLedger(db, {
+        leagueId: league ?? null,
+        refType: type ?? null,
+        profileId: profile ?? null,
+        limit,
+        offset,
+      }),
+    );
+  });
 
   app.get("/api/leagues", (c) => c.json({ leagues: listLeagues(db) }));
 
@@ -316,6 +393,34 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
       return c.json({ error: "Choose approve or reject.", code: "invalid_input" }, 400);
     }
     return c.json(reviewProject(db, profile.id, c.req.param("id"), parsed.data.decision));
+  });
+
+  app.get("/api/leagues/:id/anomalies", auth(), (c) => {
+    const profile = c.get("profile")!;
+    return c.json({ anomalies: listLeagueAnomalies(db, profile.id, c.req.param("id")) });
+  });
+
+  app.post("/api/anomalies/:id/resolve", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    if (!rateLimit(clientKey(c.req.raw.headers, "anomaly-resolve"), 60, 60_000)) {
+      return c.json({ error: "Too many review actions. Wait a minute.", code: "rate_limited" }, 429);
+    }
+    const parsed = anomalyResolveSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "Choose clear or reverse.", code: "invalid_input" }, 400);
+    }
+    return c.json(
+      resolveLeagueAnomaly(db, profile.id, c.req.param("id"), parsed.data.decision, parsed.data.note ?? ""),
+    );
+  });
+
+  app.post("/api/leagues/:id/ledger/:entryId/reverse", auth(), async (c) => {
+    const profile = c.get("profile")!;
+    if (!rateLimit(clientKey(c.req.raw.headers, "ledger-reverse"), 60, 60_000)) {
+      return c.json({ error: "Too many corrections. Wait a minute.", code: "rate_limited" }, 429);
+    }
+    const parsed = reverseSchema.safeParse(await c.req.json().catch(() => null));
+    return c.json(reverseLedgerEntry(db, profile.id, c.req.param("entryId"), parsed.success ? (parsed.data.note ?? "") : ""));
   });
 
   app.post("/api/leagues/:id/resources", auth(), async (c) => {

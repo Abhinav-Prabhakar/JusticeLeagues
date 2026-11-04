@@ -1,7 +1,19 @@
 import { createHash, randomBytes } from "node:crypto";
 import { newId, transaction, type Db } from "../db";
+import { AppError } from "./errors";
 import { shiftStart } from "./schedule";
+import { evaluateBadges, listBadges, streakForProfile } from "./badges";
+import {
+  audit,
+  detectAwardAnomalies,
+  listAnomalyRows,
+  readAnomaly,
+  recordReversal,
+  resolveAnomalyRow,
+} from "./anomalies";
+import { rebuildStandings } from "./standings";
 import type {
+  AnomalyDTO,
   ChapterDTO,
   EditionDTO,
   LeagueDTO,
@@ -29,16 +41,10 @@ import { projectPoints, type ProjectFacts } from "../../src/data/projects";
 
 export const JOIN_POINTS = 25;
 export const ATTENDANCE_POINTS_PER_HOUR = 12;
+export const ATTENDANCE_POINTS_CAP = 80;
+export const DAILY_CHECKIN_CAP = 5;
 
-export class AppError extends Error {
-  constructor(
-    public readonly status: 400 | 401 | 403 | 404 | 409,
-    public readonly code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { AppError } from "./errors";
 
 interface LeagueRow {
   id: string;
@@ -62,7 +68,15 @@ interface LeagueRow {
   recruiting: number;
   hood: string;
   ledger_points: number;
+  month_points: number;
+  prev_month_points: number;
   member_count: number;
+  project_count: number;
+  hours_count: number;
+  streak_count: number;
+  trend_json: string;
+  rank_global: number | null;
+  rank_month: number | null;
   local_projects: number;
 }
 
@@ -139,30 +153,52 @@ function timeOfDay(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/**
+ * Month-to-date points are compared on a full-month pace, so the first week
+ * of a month does not read as a collapse against a complete previous month.
+ */
+function monthDelta(month: number, previous: number, now = new Date()): number {
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  const elapsed = now.getUTCDate();
+  const pace = elapsed > 0 ? (month * daysInMonth) / elapsed : month;
+  if (previous > 0) return Math.round(((pace - previous) / previous) * 100);
+  return pace > 0 ? 100 : 0;
+}
+
 export function listLeagues(db: Db): LeagueDTO[] {
   const rows = db
     .prepare(
       `SELECT l.*, n.name AS hood,
-        COALESCE((SELECT SUM(p.delta) FROM points_ledger p WHERE p.league_id = l.id), 0) AS ledger_points,
-        COALESCE((SELECT COUNT(*) FROM league_members m
+        COALESCE(s.points, (SELECT COALESCE(SUM(p.delta), 0) FROM points_ledger p WHERE p.league_id = l.id), 0) AS ledger_points,
+        COALESCE(s.month_points, 0) AS month_points,
+        COALESCE(s.prev_month_points, 0) AS prev_month_points,
+        COALESCE(s.members, l.base_members + (SELECT COUNT(*) FROM league_members m
                    WHERE m.league_id = l.id AND m.status = 'active'), 0) AS member_count,
+        COALESCE(s.projects, l.base_projects + (SELECT COUNT(*) FROM wins w
+                   WHERE w.league_id = l.id AND w.status = 'approved' AND w.submitted_by IS NOT NULL), 0) AS project_count,
+        COALESCE(s.hours, l.base_hours) AS hours_count,
+        COALESCE(s.streak, l.base_streak) AS streak_count,
+        COALESCE(s.trend, l.trend) AS trend_json,
+        s.rank_global, s.rank_month,
         COALESCE((SELECT COUNT(*) FROM wins w
                    WHERE w.league_id = l.id AND w.status = 'approved'
                      AND w.submitted_by IS NOT NULL), 0) AS local_projects
        FROM leagues l
        JOIN chapters c ON c.id = 'ch_' || l.id
        JOIN neighborhoods n ON n.id = c.neighborhood_id
+       LEFT JOIN league_standings s ON s.league_id = l.id
        WHERE l.status = 'active'
-       ORDER BY l.base_points + ledger_points DESC`,
+       ORDER BY ledger_points DESC, l.id`,
     )
     .all() as unknown as LeagueRow[];
 
   const chapters = db
     .prepare(
       `SELECT c.*, n.name AS hood,
-        COALESCE((SELECT SUM(p.delta) FROM points_ledger p WHERE p.chapter_id = c.id), 0) AS ledger_points
+        COALESCE(cs.points, (SELECT COALESCE(SUM(p.delta), 0) FROM points_ledger p WHERE p.chapter_id = c.id), 0) AS ledger_points
        FROM chapters c
        JOIN neighborhoods n ON n.id = c.neighborhood_id
+       LEFT JOIN chapter_standings cs ON cs.chapter_id = c.id
        ORDER BY c.league_id, (c.id = 'ch_' || c.league_id) DESC, c.name`,
     )
     .all() as unknown as ChapterRow[];
@@ -174,35 +210,41 @@ export function listLeagues(db: Db): LeagueDTO[] {
       id: chapter.id,
       name: chapter.name,
       hood: chapter.hood,
-      points: chapter.base_points + chapter.ledger_points,
+      points: chapter.ledger_points,
       status: chapter.status,
     });
     byLeague.set(chapter.league_id, list);
   }
 
-  return rows.map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    cause: row.cause,
-    hood: row.hood,
-    points: row.base_points + row.ledger_points,
-    city: row.base_city_points + row.ledger_points,
-    month: row.base_month_points,
-    delta: row.delta,
-    trend: JSON.parse(row.trend) as number[],
-    members: row.base_members + row.member_count,
-    projects: row.base_projects + row.local_projects,
-    streak: row.base_streak,
-    hours: row.base_hours,
-    photo: row.photo_id,
-    x: row.atlas_x,
-    y: row.atlas_y,
-    founded: row.founded_year,
-    recruiting: row.recruiting === 1,
-    motto: row.motto,
-    chapters: byLeague.get(row.id) ?? [],
-  }));
+  return rows.map((row, index) => {
+    const month = Number(row.month_points) || 0;
+    const previous = Number(row.prev_month_points) || 0;
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      cause: row.cause,
+      hood: row.hood,
+      points: Number(row.ledger_points) || 0,
+      city: Number(row.ledger_points) || 0,
+      month,
+      delta: monthDelta(month, previous),
+      trend: JSON.parse(row.trend_json) as number[],
+      members: Number(row.member_count) || 0,
+      projects: Number(row.project_count) || 0,
+      streak: Number(row.streak_count) || 0,
+      hours: Number(row.hours_count) || 0,
+      photo: row.photo_id,
+      x: row.atlas_x,
+      y: row.atlas_y,
+      founded: row.founded_year,
+      recruiting: row.recruiting === 1,
+      motto: row.motto,
+      rank: row.rank_global ?? index + 1,
+      monthRank: row.rank_month ?? undefined,
+      chapters: byLeague.get(row.id) ?? [],
+    };
+  });
 }
 
 export function listShifts(db: Db, profileId: string | null = null): ShiftDTO[] {
@@ -344,7 +386,7 @@ export function getMe(db: Db, profileId: string): MeDTO {
       points: m.points,
     })),
     signups: signups.map((s) => ({ shiftId: s.shift_id, status: s.status, createdAt: s.created_at })),
-    points,
+    points: Number(points) || 0,
     ledger: ledger.map((entry): LedgerEntryDTO => ({
       id: entry.id,
       delta: entry.delta,
@@ -353,6 +395,8 @@ export function getMe(db: Db, profileId: string): MeDTO {
       leagueName: entry.league_name,
       createdAt: entry.created_at,
     })),
+    badges: listBadges(db, profileId),
+    streak: streakForProfile(db, profileId),
   };
 }
 
@@ -404,27 +448,32 @@ function award(
     key: string;
   },
 ): boolean {
+  const id = newId("pts");
   try {
     db.prepare(
       `INSERT INTO points_ledger
          (id, profile_id, league_id, chapter_id, delta, reason, ref_type, ref_id, idempotency_key)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      newId("pts"),
-      entry.profileId,
-      entry.leagueId,
-      entry.chapterId,
-      entry.delta,
-      entry.reason,
-      entry.refType,
-      entry.refId,
-      entry.key,
-    );
-    return true;
+    ).run(id, entry.profileId, entry.leagueId, entry.chapterId, entry.delta, entry.reason, entry.refType, entry.refId, entry.key);
   } catch (error) {
     if ((error as Error).message.includes("UNIQUE")) return false;
     throw error;
   }
+
+  // One ledger write, one cache rebuild. Standings are never computed by a
+  // browser and never drift from the append-only record.
+  rebuildStandings(db);
+  evaluateBadges(db, entry.profileId);
+  detectAwardAnomalies(db, {
+    ledgerId: id,
+    profileId: entry.profileId,
+    leagueId: entry.leagueId,
+    delta: entry.delta,
+    refType: entry.refType,
+    refId: entry.refId,
+    createdAt: new Date().toISOString(),
+  });
+  return true;
 }
 
 function joinWithinTransaction(db: Db, profileId: string, leagueId: string): boolean {
@@ -498,6 +547,7 @@ export function leaveLeague(db: Db, profileId: string, leagueId: string): { join
     if (Number(result.changes) === 0) {
       throw new AppError(409, "not_a_member", "You are not on this league's roster.");
     }
+    rebuildStandings(db);
   });
   return { joined: false };
 }
@@ -772,7 +822,22 @@ export function checkInShift(
     let awarded = 0;
 
     if (status === "attended" && hours > 0) {
-      const delta = Math.round(hours * ATTENDANCE_POINTS_PER_HOUR);
+      const today = new Date().toISOString().slice(0, 10);
+      const { count } = db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM shift_signups
+            WHERE profile_id = ? AND status = 'attended' AND substr(checked_in_at, 1, 10) = ?`,
+        )
+        .get(profileId, today) as { count: number };
+      if (Number(count) >= DAILY_CHECKIN_CAP) {
+        throw new AppError(
+          409,
+          "checkin_cap",
+          `That volunteer already has ${DAILY_CHECKIN_CAP} check-ins today. Review the record before adding another.`,
+        );
+      }
+
+      const delta = Math.min(ATTENDANCE_POINTS_CAP, Math.round(hours * ATTENDANCE_POINTS_PER_HOUR));
       const wrote = award(db, {
         profileId,
         leagueId: shift.league_id,
@@ -1061,6 +1126,11 @@ export function reviewProject(db: Db, actorId: string, projectId: string, decisi
           SET status = ?, points = ?, reviewed_by = ?, reviewed_at = ?
         WHERE id = ?`,
     ).run(decision === "approve" ? "approved" : "rejected", points, actorId, now, project.id);
+
+    // The award rebuilds before the review status lands; rebuild again so the
+    // project count in the standings matches the approved record.
+    rebuildStandings(db);
+    if (decision === "approve" && project.submitted_by) evaluateBadges(db, project.submitted_by);
 
     const updated = readProjectRow(db, projectId);
     if (!updated) throw new Error("The reviewed project could not be read back.");
@@ -1501,6 +1571,14 @@ export function removeMember(db: Db, actorId: string, leagueId: string, profileI
       leagueId,
       profileId,
     );
+    rebuildStandings(db);
+    audit(db, {
+      leagueId,
+      actorId,
+      action: "member.remove",
+      targetType: "profile",
+      targetId: profileId,
+    });
     return { removed: true as const };
   });
 }
@@ -1543,6 +1621,127 @@ export function updateLeagueSettings(
       leagueId,
     );
 
+    rebuildStandings(db);
+    audit(db, {
+      leagueId,
+      actorId,
+      action: input.archived ? "league.archive" : "league.settings",
+      targetType: "league",
+      targetId: leagueId,
+      meta: { cause: input.cause, recruiting: input.recruiting },
+    });
+
     return { updated: true as const, archived: Boolean(input.archived) };
+  });
+}
+
+export function listLeagueAnomalies(db: Db, actorId: string, leagueId: string): AnomalyDTO[] {
+  assertSteward(db, actorId, leagueId);
+  return listAnomalyRows(db, leagueId);
+}
+
+interface ReverseableLedgerRow {
+  id: string;
+  profile_id: string | null;
+  league_id: string;
+  chapter_id: string | null;
+  delta: number;
+  reason: string;
+  ref_type: string;
+  ref_id: string;
+}
+
+function reverseLedgerEntryWithinTransaction(db: Db, actorId: string, entryId: string, note: string): number {
+  const entry = db.prepare("SELECT * FROM points_ledger WHERE id = ?").get(entryId) as
+    | ReverseableLedgerRow
+    | undefined;
+  if (!entry) throw new AppError(404, "ledger_not_found", "That ledger entry is not on file.");
+  assertSteward(db, actorId, entry.league_id);
+  if (entry.ref_type === "reversal") {
+    throw new AppError(409, "cannot_reverse_reversal", "A correction cannot itself be reversed.");
+  }
+  if (db.prepare("SELECT 1 FROM points_ledger WHERE idempotency_key = ?").get(`reversal:entry:${entryId}`)) {
+    throw new AppError(409, "already_reversed", "That entry has already been reversed.");
+  }
+
+  const delta = -entry.delta;
+  const reversalId = newId("pts");
+  db.prepare(
+    `INSERT INTO points_ledger
+       (id, profile_id, league_id, chapter_id, delta, reason, ref_type, ref_id, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, 'reversal', ?, ?)`,
+  ).run(
+    reversalId,
+    entry.profile_id,
+    entry.league_id,
+    entry.chapter_id,
+    delta,
+    `Reversal: ${entry.reason}`,
+    entry.id,
+    `reversal:entry:${entry.id}`,
+  );
+
+  recordReversal(db, {
+    leagueId: entry.league_id,
+    profileId: entry.profile_id,
+    originalLedgerId: entry.id,
+    reversalLedgerId: reversalId,
+    actorId,
+    note,
+  });
+  rebuildStandings(db);
+  if (entry.profile_id) evaluateBadges(db, entry.profile_id);
+  audit(db, {
+    leagueId: entry.league_id,
+    actorId,
+    action: "ledger.reverse",
+    targetType: "ledger",
+    targetId: entry.id,
+    meta: { reversalId, delta, note },
+  });
+
+  return delta;
+}
+
+export function reverseLedgerEntry(
+  db: Db,
+  actorId: string,
+  entryId: string,
+  note: string,
+): { reversed: true; delta: number } {
+  return transaction(db, () => ({ reversed: true as const, delta: reverseLedgerEntryWithinTransaction(db, actorId, entryId, note) }));
+}
+
+export function resolveLeagueAnomaly(
+  db: Db,
+  actorId: string,
+  anomalyId: string,
+  decision: "clear" | "reverse",
+  note: string,
+): { resolved: true; reversed: boolean } {
+  return transaction(db, () => {
+    const anomaly = readAnomaly(db, anomalyId);
+    if (!anomaly) throw new AppError(404, "anomaly_not_found", "That review item is no longer on file.");
+    assertSteward(db, actorId, anomaly.league_id);
+    if (anomaly.status !== "open") {
+      throw new AppError(409, "anomaly_resolved", "That review item has already been handled.");
+    }
+
+    let reversed = false;
+    if (decision === "reverse" && anomaly.ledger_id) {
+      reverseLedgerEntryWithinTransaction(db, actorId, anomaly.ledger_id, note || "Reversed from the anomaly queue.");
+      reversed = true;
+    }
+    resolveAnomalyRow(db, anomalyId, actorId, reversed ? "reversed" : "cleared", note);
+    audit(db, {
+      leagueId: anomaly.league_id,
+      actorId,
+      action: decision === "reverse" ? "anomaly.reverse" : "anomaly.clear",
+      targetType: "anomaly",
+      targetId: anomalyId,
+      meta: { note },
+    });
+
+    return { resolved: true as const, reversed };
   });
 }

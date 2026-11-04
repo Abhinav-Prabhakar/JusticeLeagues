@@ -29,6 +29,10 @@ export interface LeagueDTO {
   founded: number;
   recruiting: boolean;
   motto: string;
+  /** Server-cached all-time rank. Absent in the static fixture shell. */
+  rank?: number;
+  /** Server-cached rank for the current calendar month. */
+  monthRank?: number;
   chapters: ChapterDTO[];
 }
 
@@ -160,12 +164,29 @@ export interface LedgerEntryDTO {
   createdAt: string;
 }
 
+export interface BadgeDTO {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
+  category: string;
+  awardedAt: string | null;
+}
+
+export interface StreakDTO {
+  current: number;
+  longest: number;
+  weekActive: boolean;
+}
+
 export interface MeDTO {
   profile: ProfileDTO;
   memberships: MembershipDTO[];
   signups: SignupDTO[];
   points: number;
   ledger: LedgerEntryDTO[];
+  badges: BadgeDTO[];
+  streak: StreakDTO;
 }
 
 export interface EditionDTO {
@@ -202,4 +223,132 @@ export interface LeagueMemberDTO {
   role: "owner" | "steward" | "member";
   chapterId: string | null;
   joinedAt: string;
+}
+
+export type StandingsScope = "global" | "city" | "cause" | "chapter" | "month";
+
+export interface StandingRowDTO {
+  rank: number;
+  leagueId: string;
+  leagueSlug: string;
+  leagueName: string;
+  cause: Cause;
+  hood: string;
+  points: number;
+  monthPoints: number;
+  members: number;
+  projects: number;
+  hours: number;
+  streak: number;
+  trend: number[];
+  /** Set when the scope is `chapter`. */
+  chapterId: string | null;
+  chapterName: string | null;
+}
+
+export interface StandingsDTO {
+  scope: StandingsScope;
+  cause: Cause | "all";
+  cityId: string | null;
+  cityName: string | null;
+  month: string;
+  updatedAt: string | null;
+  total: number;
+  rows: StandingRowDTO[];
+  mostImproved: { leagueId: string; leagueName: string; delta: number } | null;
+}
+
+export interface ImpactChapterDTO {
+  chapterId: string;
+  name: string;
+  hood: string;
+  points: number;
+  monthPoints: number;
+  projects: number;
+  share: number;
+}
+
+export interface ImpactMonthDTO {
+  month: string;
+  label: string;
+  points: number;
+}
+
+export interface ImpactCategoryDTO {
+  key: string;
+  label: string;
+  points: number;
+  entries: number;
+}
+
+export interface ImpactProjectDTO {
+  id: string;
+  title: string;
+  chapterId: string | null;
+  chapterName: string | null;
+  points: number;
+  people: number;
+  hours: number;
+  amount: string;
+  when: string;
+  evidenceUrl: string | null;
+}
+
+export interface ImpactDTO {
+  leagueId: string | null;
+  updatedAt: string;
+  totals: {
+    points: number;
+    monthPoints: number;
+    hours: number;
+    people: number;
+    projects: number;
+    volunteers: number;
+    shifts: number;
+    chapters: number;
+  };
+  byChapter: ImpactChapterDTO[];
+  byMonth: ImpactMonthDTO[];
+  byCategory: ImpactCategoryDTO[];
+  projects: ImpactProjectDTO[];
+}
+
+export interface PublicLedgerEntryDTO {
+  id: string;
+  delta: number;
+  reason: string;
+  refType: string;
+  leagueId: string;
+  leagueName: string;
+  leagueSlug: string;
+  chapterId: string | null;
+  chapterName: string | null;
+  profile: PublicProfileDTO | null;
+  createdAt: string;
+}
+
+export interface PublicLedgerDTO {
+  entries: PublicLedgerEntryDTO[];
+  total: number;
+  limit: number;
+  offset: number;
+  totals: { awarded: number; reversed: number };
+}
+
+export type AnomalySeverity = "watch" | "review" | "severe";
+export type AnomalyStatus = "open" | "cleared" | "reversed";
+
+export interface AnomalyDTO {
+  id: string;
+  leagueId: string;
+  profile: PublicProfileDTO | null;
+  ledgerId: string | null;
+  category: string;
+  severity: AnomalySeverity;
+  status: AnomalyStatus;
+  detail: string;
+  delta: number | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string;
 }

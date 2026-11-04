@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { openDatabase, DEFAULT_DB_PATH } from "./db";
 import { runMigrations } from "./db/migrate";
-import { seedIfEmpty } from "./db/seed";
+import { ensurePhase3, seedIfEmpty } from "./db/seed";
 
 /**
  * Local-only API + static host.
@@ -19,6 +19,7 @@ const db = openDatabase(dbPath);
 
 const applied = runMigrations(db);
 const seeded = seedIfEmpty(db);
+const { inserted } = ensurePhase3(db);
 
 const app = createApp(db);
 const port = Number(process.env.PORT ?? 8787);
@@ -27,6 +28,10 @@ serve({ fetch: app.fetch, port }, (info) => {
   const dist = existsSync(`${process.cwd()}/dist`);
   console.log(`Justice Leagues listening on http://127.0.0.1:${info.port}`);
   console.log(`  database  ${dbPath}`);
-  console.log(`  migrations ${applied.length ? applied.join(", ") : "up to date"}${seeded ? " · seeded" : ""}`);
+  console.log(
+    `  migrations ${applied.length ? applied.join(", ") : "up to date"}${seeded ? " · seeded" : ""}${
+      inserted ? ` · materialised ${inserted} sealed ledger rows` : ""
+    }`,
+  );
   console.log(`  mode      ${dist ? "web + api" : "api only (run `npm run dev:web` for the UI)"}`);
 });

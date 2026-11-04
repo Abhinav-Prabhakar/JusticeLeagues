@@ -2,7 +2,7 @@ import { rmSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_DB_PATH, openDatabase } from "./index";
 import { runMigrations } from "./migrate";
-import { seedIfEmpty } from "./seed";
+import { ensurePhase3, seedIfEmpty } from "./seed";
 
 /**
  * `npm run db:reset` — throw the local database away and rebuild it.
@@ -21,8 +21,10 @@ if (command === "reset") {
 const db = openDatabase(dbPath);
 const applied = runMigrations(db);
 const seeded = seedIfEmpty(db);
+const { inserted } = ensurePhase3(db);
 db.close();
 
 console.log(`${command}: ${applied.length ? `applied ${applied.join(", ")}` : "migrations up to date"}`);
 console.log(`${command}: ${seeded ? "seeded the edition" : "already seeded"}`);
+console.log(`${command}: ${inserted ? `materialised ${inserted} sealed ledger rows` : "ledger already materialised"}`);
 console.log(`${command}: ${dbPath}`);
