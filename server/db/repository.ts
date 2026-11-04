@@ -1,0 +1,508 @@
+import { newId, transaction, type Db } from "../db";
+import type {
+  ChapterDTO,
+  EditionDTO,
+  LeagueDTO,
+  LeagueMemberDTO,
+  LedgerEntryDTO,
+  MeDTO,
+  MembershipDTO,
+  ShiftDTO,
+  SignupDTO,
+  WinDTO,
+} from "../../src/lib/types";
+import type { Cause } from "../../src/data/fixtures";
+
+export const JOIN_POINTS = 25;
+
+export class AppError extends Error {
+  constructor(
+    public readonly status: 400 | 401 | 403 | 404 | 409,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+interface LeagueRow {
+  id: string;
+  slug: string;
+  name: string;
+  cause: Cause;
+  motto: string;
+  founded_year: number;
+  photo_id: number;
+  atlas_x: number;
+  atlas_y: number;
+  delta: number;
+  trend: string;
+  base_points: number;
+  base_city_points: number;
+  base_month_points: number;
+  base_members: number;
+  base_projects: number;
+  base_hours: number;
+  base_streak: number;
+  recruiting: number;
+  hood: string;
+  ledger_points: number;
+  member_count: number;
+}
+
+interface ChapterRow {
+  id: string;
+  league_id: string;
+  name: string;
+  hood: string;
+  base_points: number;
+  status: "active" | "dormant";
+  ledger_points: number;
+}
+
+interface ShiftRow {
+  id: string;
+  league_id: string;
+  chapter_id: string;
+  title: string;
+  day: number;
+  starts_at: string;
+  duration: string;
+  place_name: string;
+  capacity: number;
+  base_filled: number;
+  bring: string;
+  signup_count: number;
+}
+
+interface WinRow {
+  id: string;
+  league_id: string;
+  title: string;
+  points: number;
+  photo_id: number;
+  facts: string;
+  occurred_at: string;
+}
+
+interface ProfileRow {
+  id: string;
+  email: string;
+  handle: string;
+  display_name: string;
+  bio: string;
+  home_neighborhood: string | null;
+  causes: string;
+  created_at: string;
+}
+
+const ACTIVE_SIGNUP = "('reserved','confirmed','attended')";
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const hours = Math.floor(ms / 3600_000);
+  if (hours < 1) return "just now";
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function timeOfDay(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+export function listLeagues(db: Db): LeagueDTO[] {
+  const rows = db
+    .prepare(
+      `SELECT l.*, n.name AS hood,
+        COALESCE((SELECT SUM(p.delta) FROM points_ledger p WHERE p.league_id = l.id), 0) AS ledger_points,
+        COALESCE((SELECT COUNT(*) FROM league_members m
+                   WHERE m.league_id = l.id AND m.status = 'active'), 0) AS member_count
+       FROM leagues l
+       JOIN chapters c ON c.id = 'ch_' || l.id
+       JOIN neighborhoods n ON n.id = c.neighborhood_id
+       WHERE l.status = 'active'
+       ORDER BY l.base_points + ledger_points DESC`,
+    )
+    .all() as unknown as LeagueRow[];
+
+  const chapters = db
+    .prepare(
+      `SELECT c.*, n.name AS hood,
+        COALESCE((SELECT SUM(p.delta) FROM points_ledger p WHERE p.chapter_id = c.id), 0) AS ledger_points
+       FROM chapters c
+       JOIN neighborhoods n ON n.id = c.neighborhood_id
+       ORDER BY c.name`,
+    )
+    .all() as unknown as ChapterRow[];
+
+  const byLeague = new Map<string, ChapterDTO[]>();
+  for (const chapter of chapters) {
+    const list = byLeague.get(chapter.league_id) ?? [];
+    list.push({
+      id: chapter.id,
+      name: chapter.name,
+      hood: chapter.hood,
+      points: chapter.base_points + chapter.ledger_points,
+      status: chapter.status,
+    });
+    byLeague.set(chapter.league_id, list);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    cause: row.cause,
+    hood: row.hood,
+    points: row.base_points + row.ledger_points,
+    city: row.base_city_points + row.ledger_points,
+    month: row.base_month_points,
+    delta: row.delta,
+    trend: JSON.parse(row.trend) as number[],
+    members: row.base_members + row.member_count,
+    projects: row.base_projects,
+    streak: row.base_streak,
+    hours: row.base_hours,
+    photo: row.photo_id,
+    x: row.atlas_x,
+    y: row.atlas_y,
+    founded: row.founded_year,
+    recruiting: row.recruiting === 1,
+    motto: row.motto,
+    chapters: byLeague.get(row.id) ?? [],
+  }));
+}
+
+export function listShifts(db: Db): ShiftDTO[] {
+  const rows = db
+    .prepare(
+      `SELECT s.*,
+        (SELECT COUNT(*) FROM shift_signups ss
+          WHERE ss.shift_id = s.id AND ss.status IN ${ACTIVE_SIGNUP}) AS signup_count
+       FROM shifts s
+       WHERE s.status IN ('open', 'full')
+       ORDER BY s.starts_at`,
+    )
+    .all() as unknown as ShiftRow[];
+
+  return rows.map((row) => {
+    const filled = Math.min(row.capacity, row.base_filled + row.signup_count);
+    return {
+      id: row.id,
+      league: row.league_id,
+      chapterId: row.chapter_id,
+      title: row.title,
+      day: row.day,
+      startsAt: row.starts_at,
+      time: timeOfDay(row.starts_at),
+      dur: row.duration,
+      place: row.place_name,
+      spots: row.capacity,
+      filled,
+      bring: JSON.parse(row.bring) as ShiftDTO["bring"],
+    };
+  });
+}
+
+export function listWins(db: Db): WinDTO[] {
+  const rows = db.prepare("SELECT * FROM wins ORDER BY occurred_at DESC").all() as unknown as WinRow[];
+  return rows.map((row) => ({
+    id: row.id,
+    league: row.league_id,
+    title: row.title,
+    jp: row.points,
+    photo: row.photo_id,
+    when: relativeTime(row.occurred_at),
+    facts: JSON.parse(row.facts) as WinDTO["facts"],
+  }));
+}
+
+function profileFromRow(row: ProfileRow) {
+  return {
+    id: row.id,
+    handle: row.handle,
+    displayName: row.display_name,
+    email: row.email,
+    bio: row.bio,
+    homeNeighborhood: row.home_neighborhood,
+    causes: JSON.parse(row.causes) as Cause[],
+    createdAt: row.created_at,
+  };
+}
+
+export function getMe(db: Db, profileId: string): MeDTO {
+  const row = db.prepare("SELECT * FROM profiles WHERE id = ?").get(profileId) as ProfileRow | undefined;
+  if (!row) throw new AppError(401, "unauthenticated", "Session no longer valid.");
+
+  const memberships = db
+    .prepare(
+      `SELECT m.league_id, m.chapter_id, m.role, m.status, m.joined_at,
+        COALESCE((SELECT SUM(p.delta) FROM points_ledger p
+                   WHERE p.profile_id = m.profile_id AND p.league_id = m.league_id), 0) AS points
+         FROM league_members m WHERE m.profile_id = ? ORDER BY m.joined_at`,
+    )
+    .all(profileId) as unknown as {
+    league_id: string;
+    chapter_id: string | null;
+    role: MembershipDTO["role"];
+    status: MembershipDTO["status"];
+    joined_at: string;
+    points: number;
+  }[];
+
+  const signups = db
+    .prepare(
+      `SELECT shift_id, status, created_at FROM shift_signups
+        WHERE profile_id = ? AND status != 'cancelled' ORDER BY created_at`,
+    )
+    .all(profileId) as unknown as { shift_id: string; status: SignupDTO["status"]; created_at: string }[];
+
+  const { points } = db
+    .prepare("SELECT COALESCE(SUM(delta), 0) AS points FROM points_ledger WHERE profile_id = ?")
+    .get(profileId) as { points: number };
+
+  const ledger = db
+    .prepare(
+      `SELECT p.id, p.delta, p.reason, p.league_id, l.name AS league_name, p.created_at
+         FROM points_ledger p JOIN leagues l ON l.id = p.league_id
+        WHERE p.profile_id = ? ORDER BY p.created_at DESC, p.id DESC LIMIT 25`,
+    )
+    .all(profileId) as unknown as {
+    id: string;
+    delta: number;
+    reason: string;
+    league_id: string;
+    league_name: string;
+    created_at: string;
+  }[];
+
+  return {
+    profile: profileFromRow(row),
+    memberships: memberships.map((m) => ({
+      leagueId: m.league_id,
+      chapterId: m.chapter_id,
+      role: m.role,
+      status: m.status,
+      joinedAt: m.joined_at,
+      points: m.points,
+    })),
+    signups: signups.map((s) => ({ shiftId: s.shift_id, status: s.status, createdAt: s.created_at })),
+    points,
+    ledger: ledger.map((entry): LedgerEntryDTO => ({
+      id: entry.id,
+      delta: entry.delta,
+      reason: entry.reason,
+      leagueId: entry.league_id,
+      leagueName: entry.league_name,
+      createdAt: entry.created_at,
+    })),
+  };
+}
+
+export function getEdition(db: Db, profileId: string | null): EditionDTO {
+  return {
+    leagues: listLeagues(db),
+    shifts: listShifts(db),
+    wins: listWins(db),
+    me: profileId ? getMe(db, profileId) : null,
+  };
+}
+
+export function listMembers(db: Db, leagueId: string): LeagueMemberDTO[] {
+  const rows = db
+    .prepare(
+      `SELECT p.id, p.handle, p.display_name, m.role, m.chapter_id, m.joined_at
+         FROM league_members m JOIN profiles p ON p.id = m.profile_id
+        WHERE m.league_id = ? AND m.status = 'active'
+        ORDER BY m.joined_at`,
+    )
+    .all(leagueId) as unknown as {
+    id: string;
+    handle: string;
+    display_name: string;
+    role: LeagueMemberDTO["role"];
+    chapter_id: string | null;
+    joined_at: string;
+  }[];
+
+  return rows.map((row) => ({
+    profile: { id: row.id, handle: row.handle, displayName: row.display_name },
+    role: row.role,
+    chapterId: row.chapter_id,
+    joinedAt: row.joined_at,
+  }));
+}
+
+function award(
+  db: Db,
+  entry: {
+    profileId: string;
+    leagueId: string;
+    chapterId: string | null;
+    delta: number;
+    reason: string;
+    refType: string;
+    refId: string;
+    key: string;
+  },
+): boolean {
+  try {
+    db.prepare(
+      `INSERT INTO points_ledger
+         (id, profile_id, league_id, chapter_id, delta, reason, ref_type, ref_id, idempotency_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      newId("pts"),
+      entry.profileId,
+      entry.leagueId,
+      entry.chapterId,
+      entry.delta,
+      entry.reason,
+      entry.refType,
+      entry.refId,
+      entry.key,
+    );
+    return true;
+  } catch (error) {
+    if ((error as Error).message.includes("UNIQUE")) return false;
+    throw error;
+  }
+}
+
+function joinWithinTransaction(db: Db, profileId: string, leagueId: string): boolean {
+  const league = db.prepare("SELECT id, status, recruiting FROM leagues WHERE id = ?").get(leagueId) as
+    { id: string; status: string; recruiting: number } | undefined;
+  if (!league || league.status !== "active") {
+    throw new AppError(404, "league_not_found", "That league is not in this edition.");
+  }
+  if (league.recruiting !== 1) {
+    throw new AppError(409, "league_closed", "This league is not taking new members right now.");
+  }
+
+  const chapter = db.prepare("SELECT id FROM chapters WHERE league_id = ? ORDER BY name LIMIT 1").get(leagueId) as
+    { id: string } | undefined;
+
+  const existing = db
+    .prepare("SELECT status FROM league_members WHERE league_id = ? AND profile_id = ?")
+    .get(leagueId, profileId) as { status: string } | undefined;
+
+  if (existing?.status === "active") return false;
+
+  if (existing) {
+    db.prepare("UPDATE league_members SET status = 'active', joined_at = ? WHERE league_id = ? AND profile_id = ?").run(
+      new Date().toISOString(),
+      leagueId,
+      profileId,
+    );
+  } else {
+    db.prepare(
+      "INSERT INTO league_members (league_id, profile_id, chapter_id, role, status) VALUES (?, ?, ?, 'member', 'active')",
+    ).run(leagueId, profileId, chapter?.id ?? null);
+  }
+
+  award(db, {
+    profileId,
+    leagueId,
+    chapterId: chapter?.id ?? null,
+    delta: JOIN_POINTS,
+    reason: "Signed the league charter",
+    refType: "league_join",
+    refId: leagueId,
+    key: `join:${leagueId}:${profileId}`,
+  });
+  return true;
+}
+
+export function joinLeague(db: Db, profileId: string, leagueId: string): { joined: boolean; awarded: boolean } {
+  return transaction(db, () => ({ joined: true, awarded: joinWithinTransaction(db, profileId, leagueId) }));
+}
+
+export function leaveLeague(db: Db, profileId: string, leagueId: string): { joined: false } {
+  transaction(db, () => {
+    const result = db
+      .prepare("UPDATE league_members SET status = 'left' WHERE league_id = ? AND profile_id = ? AND status = 'active'")
+      .run(leagueId, profileId);
+    if (Number(result.changes) === 0) {
+      throw new AppError(409, "not_a_member", "You are not on this league's roster.");
+    }
+  });
+  return { joined: false };
+}
+
+export function signupShift(
+  db: Db,
+  profileId: string,
+  shiftId: string,
+): { signedUp: true; filled: number; autoJoined: boolean } {
+  return transaction(db, () => {
+    const shift = db
+      .prepare("SELECT id, league_id, capacity, base_filled, status FROM shifts WHERE id = ?")
+      .get(shiftId) as
+      { id: string; league_id: string; capacity: number; base_filled: number; status: string } | undefined;
+    if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
+    if (shift.status !== "open") throw new AppError(409, "shift_closed", "This shift is not taking signups.");
+
+    const existing = db
+      .prepare("SELECT status FROM shift_signups WHERE shift_id = ? AND profile_id = ?")
+      .get(shiftId, profileId) as { status: string } | undefined;
+    const isActive = existing && ["reserved", "confirmed", "attended"].includes(existing.status);
+
+    const { count } = db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM shift_signups
+          WHERE shift_id = ? AND status IN ${ACTIVE_SIGNUP}`,
+      )
+      .get(shiftId) as { count: number };
+
+    if (!isActive && shift.base_filled + count >= shift.capacity) {
+      throw new AppError(409, "shift_full", "Every spot on this shift is taken.");
+    }
+
+    const member = db
+      .prepare("SELECT status FROM league_members WHERE league_id = ? AND profile_id = ?")
+      .get(shift.league_id, profileId) as { status: string } | undefined;
+
+    let autoJoined = false;
+    if (member?.status !== "active") {
+      autoJoined = joinWithinTransaction(db, profileId, shift.league_id);
+    }
+
+    if (!isActive) {
+      if (existing) {
+        db.prepare(
+          "UPDATE shift_signups SET status = 'reserved', created_at = ?, updated_at = ? WHERE shift_id = ? AND profile_id = ?",
+        ).run(new Date().toISOString(), new Date().toISOString(), shiftId, profileId);
+      } else {
+        db.prepare("INSERT INTO shift_signups (shift_id, profile_id, status) VALUES (?, ?, 'reserved')").run(
+          shiftId,
+          profileId,
+        );
+      }
+    }
+
+    return {
+      signedUp: true,
+      filled: Math.min(shift.capacity, shift.base_filled + count + (isActive ? 0 : 1)),
+      autoJoined,
+    };
+  });
+}
+
+export function cancelShift(db: Db, profileId: string, shiftId: string): { signedUp: false } {
+  transaction(db, () => {
+    const result = db
+      .prepare(
+        `UPDATE shift_signups SET status = 'cancelled', updated_at = ?
+          WHERE shift_id = ? AND profile_id = ? AND status IN ${ACTIVE_SIGNUP}`,
+      )
+      .run(new Date().toISOString(), shiftId, profileId);
+    if (Number(result.changes) === 0) {
+      throw new AppError(409, "not_signed_up", "You are not on this shift.");
+    }
+  });
+  return { signedUp: false };
+}

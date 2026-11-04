@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 560" width="1400" height="560" role="img" aria-label="Architecture: React browser talks to a Hono API, which owns a SQLite ledger and vendored offline assets">
+  <defs>
+    <pattern id="dots" width="8" height="8" patternUnits="userSpaceOnUse">
+      <circle cx="1.4" cy="1.4" r="0.9" fill="#14110d" opacity="0.12"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#14110d"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="560" fill="#f4eee1"/>
+  <rect width="1400" height="560" fill="url(#dots)"/>
+
+  <rect x="56" y="34" width="1288" height="3" fill="#14110d"/>
+  <text x="56" y="72" font-family="Georgia, 'Times New Roman', serif" font-size="34" font-weight="bold" fill="#14110d">Under the hood</text>
+  <text x="1344" y="70" text-anchor="end" font-family="'IBM Plex Mono', Menlo, monospace" font-size="12" letter-spacing="2" fill="#4a4338">ONE MACHINE · ONE PROCESS · ONE FILE</text>
+
+  <!-- browser card -->
+  <g transform="translate(56 130)">
+    <rect x="6" y="7" width="368" height="300" fill="#14110d"/>
+    <rect width="368" height="300" fill="#fffdf7" stroke="#14110d" stroke-width="3"/>
+    <rect width="368" height="52" fill="#2347c5"/>
+    <text x="24" y="34" font-family="'IBM Plex Mono', Menlo, monospace" font-size="15" font-weight="bold" letter-spacing="2.5" fill="#f4eee1">01 · BROWSER</text>
+    <circle cx="332" cy="26" r="6" fill="#f2b705"/>
+    <text x="24" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" font-weight="bold" fill="#14110d">The paper</text>
+    <g font-family="'IBM Plex Mono', Menlo, monospace" font-size="14" fill="#4a4338">
+      <text x="24" y="136">React 19 + Vite</text>
+      <text x="24" y="168">TanStack Query</text>
+      <text x="24" y="200">optimistic join / signup</text>
+      <text x="24" y="232">newspaper UI, offline assets</text>
+    </g>
+    <rect x="24" y="256" width="120" height="24" rx="12" fill="#e8a200" opacity="0.25"/>
+    <text x="84" y="272" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#7a5a00">ROLLBACK SAFE</text>
+  </g>
+
+  <!-- arrow 1 -->
+  <g stroke="#14110d" stroke-width="3" fill="none">
+    <path d="M 444 280 H 500" marker-end="url(#arrow)"/>
+  </g>
+  <text x="472" y="262" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="11" letter-spacing="1.5" fill="#4a4338">fetch /api</text>
+
+  <!-- api card -->
+  <g transform="translate(516 130)">
+    <rect x="6" y="7" width="368" height="300" fill="#14110d"/>
+    <rect width="368" height="300" fill="#fffdf7" stroke="#14110d" stroke-width="3"/>
+    <rect width="368" height="52" fill="#d9381e"/>
+    <text x="24" y="34" font-family="'IBM Plex Mono', Menlo, monospace" font-size="15" font-weight="bold" letter-spacing="2.5" fill="#f4eee1">02 · API</text>
+    <circle cx="332" cy="26" r="6" fill="#f2b705"/>
+    <text x="24" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" font-weight="bold" fill="#14110d">The press</text>
+    <g font-family="'IBM Plex Mono', Menlo, monospace" font-size="14" fill="#4a4338">
+      <text x="24" y="136">Hono on Node</text>
+      <text x="24" y="168">Zod request schemas</text>
+      <text x="24" y="200">scrypt + hashed sessions</text>
+      <text x="24" y="232">rate limits · authorization</text>
+    </g>
+    <rect x="24" y="256" width="132" height="24" rx="12" fill="#1b7f5c" opacity="0.22"/>
+    <text x="90" y="272" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#136046">SERVER-AUTHORED</text>
+  </g>
+
+  <!-- arrow 2 -->
+  <g stroke="#14110d" stroke-width="3" fill="none">
+    <path d="M 904 280 H 960" marker-end="url(#arrow)"/>
+  </g>
+  <text x="932" y="262" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="11" letter-spacing="1.5" fill="#4a4338">SQL</text>
+
+  <!-- sqlite card -->
+  <g transform="translate(976 130)">
+    <rect x="6" y="7" width="368" height="300" fill="#14110d"/>
+    <rect width="368" height="300" fill="#fffdf7" stroke="#14110d" stroke-width="3"/>
+    <rect width="368" height="52" fill="#1b7f5c"/>
+    <text x="24" y="34" font-family="'IBM Plex Mono', Menlo, monospace" font-size="15" font-weight="bold" letter-spacing="2.5" fill="#f4eee1">03 · SQLITE</text>
+    <circle cx="332" cy="26" r="6" fill="#f2b705"/>
+    <text x="24" y="94" font-family="Georgia, 'Times New Roman', serif" font-size="27" font-weight="bold" fill="#14110d">The record</text>
+    <g font-family="'IBM Plex Mono', Menlo, monospace" font-size="14" fill="#4a4338">
+      <text x="24" y="136">node:sqlite · WAL</text>
+      <text x="24" y="168">plain-SQL migrations</text>
+      <text x="24" y="200">append-only points ledger</text>
+      <text x="24" y="232">members · shifts · chapters</text>
+    </g>
+    <rect x="24" y="256" width="150" height="24" rx="12" fill="#2347c5" opacity="0.18"/>
+    <text x="99" y="272" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="11" font-weight="bold" fill="#1b3499">IDEMPOTENT AWARDS</text>
+  </g>
+
+  <!-- offline strip -->
+  <g transform="translate(56 464)">
+    <rect x="0" y="-28" width="1288" height="58" fill="#14110d"/>
+    <text x="22" y="8" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" letter-spacing="1.5" fill="#f4eee1">data/justice-leagues.db</text>
+    <text x="420" y="8" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" letter-spacing="1.5" fill="#f2b705">public/photos + public/fonts</text>
+    <text x="1266" y="8" text-anchor="end" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" letter-spacing="1.5" fill="#f4eee1">NO HOSTED SERVICES</text>
+  </g>
+</svg>

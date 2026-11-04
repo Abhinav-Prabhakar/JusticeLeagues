@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" width="1600" height="420" role="img" aria-label="The Justice Leagues — organised neighbours, measured impact">
+  <defs>
+    <pattern id="halftone" width="7" height="7" patternUnits="userSpaceOnUse">
+      <circle cx="1.4" cy="1.4" r="1" fill="#14110d" opacity="0.16"/>
+    </pattern>
+    <pattern id="wide-dots" width="13" height="13" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.4" fill="#14110d" opacity="0.08"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="420" fill="#f4eee1"/>
+  <rect width="1600" height="420" fill="url(#halftone)"/>
+  <rect x="1020" y="0" width="580" height="420" fill="url(#wide-dots)"/>
+
+  <!-- rules -->
+  <rect x="72" y="30" width="1456" height="3" fill="#14110d"/>
+  <rect x="72" y="38" width="1456" height="1" fill="#14110d"/>
+
+  <!-- top metadata -->
+  <text x="72" y="66" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" letter-spacing="2.4" fill="#4a4338">VOL. I · THE CIVIC EDITION</text>
+  <text x="1528" y="66" text-anchor="end" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" letter-spacing="2.4" fill="#4a4338">RUNS LOCALLY · NO CLOUD</text>
+
+  <!-- scales mark -->
+  <g transform="translate(148 176)" stroke="#d9381e" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 -34 V34"/>
+    <path d="M-30 34 H30"/>
+    <path d="M-52 -22 H52"/>
+    <path d="M-52 -22 L-72 18 H-32 Z"/>
+    <path d="M52 -22 L32 18 H72 Z"/>
+    <path d="M-72 18 Q-52 34 -32 18"/>
+    <path d="M32 18 Q52 34 72 18"/>
+    <circle cx="0" cy="-42" r="6" fill="#d9381e" stroke="none"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="800" y="128" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="42" fill="#14110d">The</text>
+  <text x="800" y="252" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="128" font-weight="bold" letter-spacing="-3" fill="#14110d">Justice Leagues</text>
+
+  <!-- divider with diamond -->
+  <g transform="translate(800 282)">
+    <rect x="-300" y="-1" width="240" height="2" fill="#14110d"/>
+    <rect x="60" y="-1" width="240" height="2" fill="#14110d"/>
+    <rect x="-8" y="-8" width="16" height="16" transform="rotate(45)" fill="#f2b705" stroke="#14110d" stroke-width="2"/>
+  </g>
+
+  <text x="800" y="322" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="16" letter-spacing="7" fill="#4a4338">ORGANISED NEIGHBOURS · MEASURED IMPACT</text>
+
+  <!-- chips -->
+  <g transform="translate(72 360)">
+    <rect x="0" y="-21" width="150" height="34" rx="17" fill="#1b7f5c"/>
+    <text x="75" y="2" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" font-weight="bold" letter-spacing="1.6" fill="#f4eee1">LOCAL-FIRST</text>
+    <rect x="162" y="-21" width="176" height="34" rx="17" fill="none" stroke="#14110d" stroke-width="2"/>
+    <text x="250" y="2" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, monospace" font-size="13" font-weight="bold" letter-spacing="1.6" fill="#14110d">OPEN SOURCE</text>
+  </g>
+
+  <g transform="translate(1450 360)">
+    <rect x="-118" y="-23" width="118" height="40" rx="20" fill="#14110d"/>
+    <circle cx="-92" cy="-3" r="12" fill="#f2b705"/>
+    <text x="-74" y="2" font-family="'IBM Plex Mono', Menlo, monospace" font-size="14" font-weight="bold" fill="#f4eee1">25 JP</text>
+  </g>
+
+  <rect x="72" y="398" width="1456" height="3" fill="#14110d"/>
+  <rect x="72" y="405" width="1456" height="1" fill="#14110d"/>
+</svg>
