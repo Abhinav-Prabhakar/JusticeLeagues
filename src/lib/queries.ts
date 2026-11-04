@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ShiftDTO } from "./types";
+import type { EditionDTO, LeagueDTO, LeagueMemberDTO, MeDTO, ShiftDTO, ShiftRosterDTO } from "./types";
 import { api, initialEdition } from "./api";
 import { useApp } from "../ctx";
 
@@ -43,6 +43,16 @@ export function useLeagueDetail(leagueId: string) {
     queryKey: ["league", leagueId],
     queryFn: () => api<LeagueDetail>(`/api/leagues/${leagueId}`),
     staleTime: 20_000,
+    retry: 1,
+  });
+}
+
+export function useShiftRoster(shiftId: string | null) {
+  return useQuery({
+    queryKey: ["roster", shiftId],
+    queryFn: () => api<ShiftRosterDTO>(`/api/shifts/${shiftId}/roster`),
+    enabled: Boolean(shiftId),
+    staleTime: 5_000,
     retry: 1,
   });
 }
@@ -200,6 +210,32 @@ export function useCancelShift() {
     },
     onSuccess: () => toast("Shift cancelled"),
     onSettled: () => invalidateEdition(client),
+  });
+}
+
+interface CheckInInput {
+  shiftId: string;
+  profileId: string;
+  status: "attended" | "no_show";
+}
+
+export function useCheckIn() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+
+  return useMutation({
+    mutationFn: ({ shiftId, profileId, status }: CheckInInput) =>
+      api<{ awarded: number; roster: ShiftRosterDTO }>(`/api/shifts/${shiftId}/check-in`, {
+        method: "POST",
+        body: JSON.stringify({ profileId, status }),
+      }),
+    onSuccess: (result, input) => {
+      client.setQueryData(["roster", input.shiftId], result.roster);
+      invalidateEdition(client);
+      if (result.awarded > 0) toast("Attendance recorded", result.awarded);
+      else toast(input.status === "no_show" ? "Marked as a no-show" : "Attendance recorded");
+    },
+    onError: (error) => toast(error.message),
   });
 }
 

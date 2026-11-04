@@ -24,7 +24,8 @@ async function register(email = "ada@example.com", displayName = "Ada Lovelace")
     causes: ["climate"],
   });
   const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
-  return { response, cookie };
+  const payload = (await response.clone().json()) as { me?: { profile: { id: string } } };
+  return { response, cookie, profileId: payload.me?.profile.id ?? "" };
 }
 
 beforeEach(() => {
@@ -118,5 +119,66 @@ describe("edition API", () => {
     const payload = (await edition.json()) as { shifts: { id: string; filled: number }[]; me: null };
     expect(payload.shifts.find((shift) => shift.id === "s11")!.filled).toBe(4);
     expect(payload.me).toBeNull();
+  });
+});
+
+describe("steward API", () => {
+  async function loginSteward(email: string) {
+    const response = await post("/api/auth/login", { email, password: "millbrook" });
+    expect(response.status).toBe(200);
+    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+  }
+
+  it("lets a steward record attendance once and blocks everyone else", async () => {
+    const stewardCookie = await loginSteward("steward.harbor.1@justiceleagues.local");
+    const volunteer = await register("volunteer@example.com", "Volunteer One");
+
+    const signup = await app.request("/api/shifts/s11/signup", {
+      method: "POST",
+      headers: { cookie: volunteer.cookie },
+    });
+    expect(signup.status).toBe(200);
+
+    const denied = await post(
+      "/api/shifts/s11/check-in",
+      { profileId: volunteer.profileId, status: "attended" },
+      volunteer.cookie,
+    );
+    expect(denied.status).toBe(403);
+
+    const first = await post(
+      "/api/shifts/s11/check-in",
+      { profileId: volunteer.profileId, status: "attended" },
+      stewardCookie,
+    );
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as {
+      awarded: number;
+      roster: { entries: { profile: { id: string }; status: string; hours: number }[] };
+    };
+    expect(firstBody.awarded).toBe(24);
+    expect(firstBody.roster.entries.find((entry) => entry.profile.id === volunteer.profileId)).toMatchObject({
+      status: "attended",
+      hours: 2,
+    });
+
+    const again = await post(
+      "/api/shifts/s11/check-in",
+      { profileId: volunteer.profileId, status: "attended" },
+      stewardCookie,
+    );
+    expect(((await again.json()) as { awarded: number }).awarded).toBe(0);
+
+    const me = await app.request("/api/auth/me", { headers: { cookie: volunteer.cookie } });
+    const meBody = (await me.json()) as { me: { points: number; ledger: { delta: number }[] } };
+    expect(meBody.me.points).toBe(25 + 24);
+    expect(meBody.me.ledger).toHaveLength(2);
+  });
+
+  it("refuses a roster read to a plain member", async () => {
+    const volunteer = await register("plain@example.com", "Plain Member");
+    const response = await app.request("/api/shifts/s11/roster", { headers: { cookie: volunteer.cookie } });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code: string }).code).toBe("not_steward");
   });
 });

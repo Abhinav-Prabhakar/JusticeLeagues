@@ -1,7 +1,50 @@
 import { LEAGUES, SHIFTS, WINS } from "../../src/data/fixtures";
+import { hashPassword } from "../auth/password";
 import { transaction, type Db } from "./index";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
+
+/** Password for the seeded chapter stewards. Documented in the README. */
+export const DEMO_PASSWORD = "millbrook";
+
+const DEMO_NAMES = [
+  "Ada Okafor",
+  "Bruno Salas",
+  "Camille Duval",
+  "Darius Reed",
+  "Elena Petrova",
+  "Farah Haddad",
+  "Gideon Park",
+  "Hana Mori",
+  "Imani Brooks",
+  "Jonas Weber",
+  "Keiko Tan",
+  "Lucas Moreau",
+  "Maren Oduya",
+  "Nadia Rahman",
+  "Omar Haddad",
+  "Priya Nair",
+  "Quinn Alvarez",
+  "Rosa Delgado",
+  "Samir Patel",
+  "Tessa Lindqvist",
+  "Umar Bello",
+  "Vera Kovac",
+  "Wes Tanaka",
+  "Ximena Ortiz",
+  "Yara Haddad",
+  "Zane Whitfield",
+  "Aisha Bello",
+  "Diego Ramos",
+  "Freya Holm",
+  "Hugo Mensah",
+];
+
+let cachedDemoHash: string | null = null;
+function demoPasswordHash(): string {
+  cachedDemoHash ??= hashPassword(DEMO_PASSWORD);
+  return cachedDemoHash;
+}
 
 export function slugify(value: string): string {
   return value
@@ -108,6 +151,59 @@ export function seedIfEmpty(db: Db): boolean {
           shares[index + 1],
         );
       });
+    }
+
+    // Every chapter gets one seeded steward so roles, rosters, and check-in
+    // are usable on a fresh database. The founding chapter's steward owns the
+    // league; the other two steward their chapter. All share DEMO_PASSWORD.
+    const insertProfile = db.prepare(`
+      INSERT INTO profiles (id, email, password_hash, handle, display_name, bio, city_id, home_neighborhood, causes)
+      VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
+    `);
+    const insertDemoMembership = db.prepare(`
+      INSERT INTO league_members (league_id, profile_id, chapter_id, role, status, joined_at)
+      VALUES (?, ?, ?, ?, 'active', ?)
+    `);
+    const chapterRows = db
+      .prepare(
+        `SELECT id, league_id, neighborhood_id, name
+           FROM chapters
+          ORDER BY league_id, (id = 'ch_' || league_id) DESC, name`,
+      )
+      .all() as unknown as { id: string; league_id: string; neighborhood_id: string; name: string }[];
+
+    const byLeague = new Map<string, typeof chapterRows>();
+    for (const chapter of chapterRows) {
+      const list = byLeague.get(chapter.league_id) ?? [];
+      list.push(chapter);
+      byLeague.set(chapter.league_id, list);
+    }
+
+    let nameIndex = 0;
+    for (const league of LEAGUES) {
+      for (const [index, chapter] of (byLeague.get(league.id) ?? []).entries()) {
+        const name = DEMO_NAMES[nameIndex % DEMO_NAMES.length];
+        nameIndex += 1;
+        const profileId = `usr_seed_${league.id}_${index + 1}`;
+        const email = `steward.${league.id}.${index + 1}@justiceleagues.local`;
+        insertProfile.run(
+          profileId,
+          email,
+          demoPasswordHash(),
+          slugify(name),
+          name,
+          CITY.id,
+          chapter.neighborhood_id,
+          JSON.stringify([league.cause]),
+        );
+        insertDemoMembership.run(
+          league.id,
+          profileId,
+          chapter.id,
+          index === 0 ? "owner" : "steward",
+          new Date(Date.UTC(league.founded, 4, index + 1, 9)).toISOString(),
+        );
+      }
     }
 
     const insertShift = db.prepare(`

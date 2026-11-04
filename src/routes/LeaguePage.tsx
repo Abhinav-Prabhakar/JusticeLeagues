@@ -1,5 +1,15 @@
 import { NavLink, Outlet, useParams, Link } from "react-router-dom";
-import { CalendarDays, Compass, LayoutGrid, MapPin, Sparkles, Trophy, UserCheck, Users } from "lucide-react";
+import {
+  CalendarDays,
+  Compass,
+  LayoutGrid,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  Trophy,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import { CAUSES, fmt } from "../data";
 import { activeMembership } from "../lib/api";
 import { useEdition } from "../lib/queries";
@@ -17,6 +27,8 @@ const TABS = [
   { to: "impact", label: "Impact", icon: Sparkles, end: false },
 ];
 
+const STEWARD_TAB = { to: "steward", label: "Steward", icon: ShieldCheck, end: false };
+
 export default function LeaguePage() {
   const { id } = useParams<{ id: string }>();
   const { data } = useEdition();
@@ -27,6 +39,8 @@ export default function LeaguePage() {
   const c = CAUSES[l.cause];
   const color = c.color === "#14110d" ? "#4a4338" : c.color;
   const membership = activeMembership(data.me, l.id);
+  const isSteward = membership?.role === "owner" || membership?.role === "steward";
+  const tabs = isSteward ? [...TABS, STEWARD_TAB] : TABS;
   const myChapter = l.chapters.find((chapter) => chapter.id === membership?.chapterId);
   const rank = [...data.leagues].sort((a, b) => b.points - a.points).findIndex((x) => x.id === l.id) + 1;
   const context: LeagueContextValue = { league: l, edition: data };
@@ -119,21 +133,24 @@ export default function LeaguePage() {
         aria-label="League sections"
         className="border-ink bg-paper/95 no-scrollbar sticky top-[60px] z-30 -mx-4 mt-6 flex gap-1 overflow-x-auto border-b-2 px-4 backdrop-blur-md md:mx-0 md:px-0"
       >
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <NavLink
             key={tab.label}
             to={tab.to}
             end={tab.end}
             className={({ isActive }) =>
               cn(
-                "group flex shrink-0 items-center gap-1.5 border-b-[3px] px-3 py-3 font-sans text-[11px] font-extrabold tracking-wider uppercase transition-colors",
+                "group flex shrink-0 items-center gap-1.5 border-b-[3px] px-2.5 py-3 font-sans text-[10px] font-extrabold tracking-wider uppercase transition-colors sm:px-3 sm:text-[11px]",
                 isActive ? "border-vermilion text-ink" : "text-ink-3 hover:text-ink border-transparent",
               )
             }
           >
             {({ isActive }) => (
               <>
-                <tab.icon size={13} className={isActive ? "text-vermilion" : "group-hover:text-ink"} />
+                <tab.icon
+                  size={13}
+                  className={cn("hidden sm:block", isActive ? "text-vermilion" : "group-hover:text-ink")}
+                />
                 {tab.label}
               </>
             )}

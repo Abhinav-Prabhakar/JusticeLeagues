@@ -122,3 +122,38 @@ test("two accounts see the same filled spots after refresh", async ({ browser, p
     await contextB.close();
   }
 });
+
+test("a seeded steward checks a volunteer in and the points stick", async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL!;
+  const volunteerContext = await browser.newContext({ baseURL });
+  const stewardContext = await browser.newContext({ baseURL });
+
+  try {
+    await registerViaApi(volunteerContext, "Nia Roberts", uniqueEmail("nia"));
+    const signup = await volunteerContext.request.post("/api/shifts/s11/signup");
+    expect(signup.ok()).toBeTruthy();
+
+    const steward = await stewardContext.newPage();
+    await steward.goto("/login");
+    await steward.getByLabel("Email", { exact: true }).fill("steward.harbor.1@justiceleagues.local");
+    await steward.getByLabel("Password", { exact: true }).fill("millbrook");
+    await steward.getByRole("button", { name: /^sign in$/i }).click();
+    await expect(steward).toHaveURL(/\/dashboard$/);
+
+    await steward.goto("/leagues/harbor/steward");
+    await expect(steward.getByRole("link", { name: /^steward$/i })).toHaveAttribute("aria-current", "page");
+
+    const row = steward.locator("li").filter({ hasText: "Nia Roberts" });
+    await row.getByRole("button", { name: /mark nia roberts attended/i }).click();
+    await expect(row).toContainText("24 JP");
+    await expect(row).toContainText("attended");
+
+    const volunteer = await volunteerContext.newPage();
+    await volunteer.goto("/dashboard");
+    await expect(volunteer.getByRole("link", { name: /your justice points: 49/i })).toBeVisible();
+    await expect(volunteer.getByText(/attended storm-drain stencilling/i)).toBeVisible();
+  } finally {
+    await volunteerContext.close();
+    await stewardContext.close();
+  }
+});

@@ -8,12 +8,15 @@ import type {
   MeDTO,
   MembershipDTO,
   ShiftDTO,
+  ShiftRosterDTO,
+  ShiftRosterEntryDTO,
   SignupDTO,
   WinDTO,
 } from "../../src/lib/types";
 import type { Cause } from "../../src/data/fixtures";
 
 export const JOIN_POINTS = 25;
+export const ATTENDANCE_POINTS_PER_HOUR = 12;
 
 export class AppError extends Error {
   constructor(
@@ -509,6 +512,13 @@ export function signupShift(
 
 export function cancelShift(db: Db, profileId: string, shiftId: string): { signedUp: false } {
   transaction(db, () => {
+    const existing = db
+      .prepare("SELECT status FROM shift_signups WHERE shift_id = ? AND profile_id = ?")
+      .get(shiftId, profileId) as { status: string } | undefined;
+    if (existing && (existing.status === "attended" || existing.status === "no_show")) {
+      throw new AppError(409, "attendance_locked", "A steward already recorded this shift. The record is final.");
+    }
+
     const result = db
       .prepare(
         `UPDATE shift_signups SET status = 'cancelled', updated_at = ?
@@ -520,4 +530,157 @@ export function cancelShift(db: Db, profileId: string, shiftId: string): { signe
     }
   });
   return { signedUp: false };
+}
+
+/** "2h" → 2, "1.5h" → 1.5. Seeded shifts all carry an hour suffix. */
+function hoursFromDuration(duration: string): number {
+  const match = duration.match(/(\d+(?:\.\d+)?)\s*h/i);
+  return match ? Number(match[1]) : 2;
+}
+
+function assertSteward(db: Db, profileId: string, leagueId: string) {
+  const row = db
+    .prepare("SELECT role FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
+    .get(leagueId, profileId) as { role: string } | undefined;
+  if (row?.role !== "owner" && row?.role !== "steward") {
+    throw new AppError(403, "not_steward", "Only a league steward can see or record attendance.");
+  }
+}
+
+interface RosterShiftRow {
+  id: string;
+  league_id: string;
+  chapter_id: string;
+  title: string;
+  day: number;
+  starts_at: string;
+  duration: string;
+  place_name: string;
+  capacity: number;
+  base_filled: number;
+  bring: string;
+}
+
+function readRoster(db: Db, shiftId: string): ShiftRosterDTO {
+  const shift = db.prepare("SELECT * FROM shifts WHERE id = ?").get(shiftId) as RosterShiftRow | undefined;
+  if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
+
+  const { count } = db
+    .prepare(`SELECT COUNT(*) AS count FROM shift_signups WHERE shift_id = ? AND status IN ${ACTIVE_SIGNUP}`)
+    .get(shiftId) as { count: number };
+
+  const rows = db
+    .prepare(
+      `SELECT ss.status, ss.hours, ss.checked_in_at, p.id, p.handle, p.display_name
+         FROM shift_signups ss
+         JOIN profiles p ON p.id = ss.profile_id
+        WHERE ss.shift_id = ?
+          AND ss.status IN ('reserved', 'confirmed', 'waitlist', 'attended', 'no_show')
+        ORDER BY CASE ss.status
+                   WHEN 'attended' THEN 0
+                   WHEN 'no_show' THEN 1
+                   WHEN 'confirmed' THEN 2
+                   ELSE 3
+                 END,
+                 p.display_name`,
+    )
+    .all(shiftId) as unknown as {
+    status: ShiftRosterEntryDTO["status"];
+    hours: number;
+    checked_in_at: string | null;
+    id: string;
+    handle: string;
+    display_name: string;
+  }[];
+
+  return {
+    shift: {
+      id: shift.id,
+      league: shift.league_id,
+      chapterId: shift.chapter_id,
+      title: shift.title,
+      day: shift.day,
+      startsAt: shift.starts_at,
+      time: timeOfDay(shift.starts_at),
+      dur: shift.duration,
+      place: shift.place_name,
+      spots: shift.capacity,
+      filled: Math.min(shift.capacity, shift.base_filled + count),
+      bring: JSON.parse(shift.bring) as ShiftDTO["bring"],
+    },
+    pointsPerHour: ATTENDANCE_POINTS_PER_HOUR,
+    sealed: shift.base_filled,
+    entries: rows.map((row) => ({
+      profile: { id: row.id, handle: row.handle, displayName: row.display_name },
+      status: row.status,
+      hours: row.hours,
+      checkedInAt: row.checked_in_at,
+    })),
+  };
+}
+
+export function getShiftRoster(db: Db, actorId: string, shiftId: string): ShiftRosterDTO {
+  const shift = db.prepare("SELECT league_id FROM shifts WHERE id = ?").get(shiftId) as
+    { league_id: string } | undefined;
+  if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
+  assertSteward(db, actorId, shift.league_id);
+  return readRoster(db, shiftId);
+}
+
+export function checkInShift(
+  db: Db,
+  actorId: string,
+  shiftId: string,
+  profileId: string,
+  status: "attended" | "no_show",
+): { awarded: number; roster: ShiftRosterDTO } {
+  return transaction(db, () => {
+    const shift = db.prepare("SELECT id, league_id, title, duration FROM shifts WHERE id = ?").get(shiftId) as
+      { id: string; league_id: string; title: string; duration: string } | undefined;
+    if (!shift) throw new AppError(404, "shift_not_found", "That shift is no longer posted.");
+    assertSteward(db, actorId, shift.league_id);
+
+    const member = db
+      .prepare("SELECT chapter_id FROM league_members WHERE league_id = ? AND profile_id = ? AND status = 'active'")
+      .get(shift.league_id, profileId) as { chapter_id: string | null } | undefined;
+    if (!member) throw new AppError(409, "not_a_member", "That volunteer is not on this league's roster.");
+
+    const signup = db
+      .prepare("SELECT status FROM shift_signups WHERE shift_id = ? AND profile_id = ?")
+      .get(shiftId, profileId) as { status: string } | undefined;
+    if (!signup) throw new AppError(409, "not_signed_up", "That volunteer never claimed this shift.");
+    if (signup.status === "attended") {
+      return { awarded: 0, roster: readRoster(db, shiftId) };
+    }
+    if (!["reserved", "confirmed", "waitlist", "no_show"].includes(signup.status)) {
+      throw new AppError(409, "not_signed_up", "That volunteer is no longer on this shift.");
+    }
+
+    const hours = status === "attended" ? hoursFromDuration(shift.duration) : 0;
+    let awarded = 0;
+
+    if (status === "attended" && hours > 0) {
+      const delta = Math.round(hours * ATTENDANCE_POINTS_PER_HOUR);
+      const wrote = award(db, {
+        profileId,
+        leagueId: shift.league_id,
+        chapterId: member.chapter_id,
+        delta,
+        reason: `Attended ${shift.title}`,
+        refType: "shift_attendance",
+        refId: shiftId,
+        key: `attendance:${shiftId}:${profileId}`,
+      });
+      if (wrote) awarded = delta;
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(
+      `UPDATE shift_signups
+          SET status = ?, hours = ?, checked_in_at = ?, checked_in_by = ?, updated_at = ?
+        WHERE shift_id = ? AND profile_id = ?`,
+    ).run(status, hours, now, actorId, now, shiftId, profileId);
+
+    return { awarded, roster: readRoster(db, shiftId) };
+  });
 }

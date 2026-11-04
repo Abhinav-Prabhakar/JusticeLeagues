@@ -114,6 +114,21 @@ export interface PublicProfileDTO {
   displayName: string;
 }
 
+export interface ShiftRosterEntryDTO {
+  profile: PublicProfileDTO;
+  status: "reserved" | "confirmed" | "attended" | "no_show" | "waitlist";
+  hours: number;
+  checkedInAt: string | null;
+}
+
+export interface ShiftRosterDTO {
+  shift: ShiftDTO;
+  pointsPerHour: number;
+  /** Spots already filled in the printed edition; they have no local signup. */
+  sealed: number;
+  entries: ShiftRosterEntryDTO[];
+}
+
 export interface LeagueMemberDTO {
   profile: PublicProfileDTO;
   role: "owner" | "steward" | "member";

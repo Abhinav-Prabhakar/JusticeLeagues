@@ -7,10 +7,13 @@ import {
   AppError,
   JOIN_POINTS,
   cancelShift,
+  checkInShift,
   getMe,
+  getShiftRoster,
   joinLeague,
   leaveLeague,
   listLeagues,
+  listMembers,
   listShifts,
   signupShift,
 } from "./repository";
@@ -36,7 +39,7 @@ describe("seed", () => {
     expect(seedIfEmpty(db)).toBe(false);
     const harbor = listLeagues(db).find((league) => league.id === "harbor")!;
     expect(harbor.points).toBe(48210);
-    expect(harbor.members).toBe(1284);
+    expect(harbor.members).toBe(1287);
     expect(harbor.chapters).toHaveLength(3);
     expect(harbor.chapters[0].hood).toBe("Mill River Docks");
   });
@@ -66,7 +69,7 @@ describe("membership", () => {
 
     const league = listLeagues(db).find((item) => item.id === "harbor")!;
     expect(league.points).toBe(48210 + JOIN_POINTS);
-    expect(league.members).toBe(1285);
+    expect(league.members).toBe(1288);
   });
 
   it("leaving frees the roster spot but does not rewrite history", () => {
@@ -132,5 +135,76 @@ describe("shift capacity", () => {
     const second = signupShift(db, "usr_e", "s11");
     expect(second.filled).toBe(first.filled);
     expect(getMe(db, "usr_e").signups).toHaveLength(1);
+  });
+});
+
+describe("steward check-in", () => {
+  const OWNER = "usr_seed_harbor_1";
+
+  it("awards points once for an attended shift and records hours", () => {
+    makeProfile("usr_vol");
+    signupShift(db, "usr_vol", "s11");
+
+    const result = checkInShift(db, OWNER, "s11", "usr_vol", "attended");
+    expect(result.awarded).toBe(24);
+
+    const me = getMe(db, "usr_vol");
+    expect(me.points).toBe(JOIN_POINTS + 24);
+    expect(me.signups[0].status).toBe("attended");
+    expect(me.ledger.find((entry) => entry.reason.includes("Storm-drain"))?.delta).toBe(24);
+
+    const again = checkInShift(db, OWNER, "s11", "usr_vol", "attended");
+    expect(again.awarded).toBe(0);
+    expect(getMe(db, "usr_vol").points).toBe(JOIN_POINTS + 24);
+  });
+
+  it("records a no-show without minting points, then allows a correction", () => {
+    makeProfile("usr_late2");
+    signupShift(db, "usr_late2", "s11");
+
+    expect(checkInShift(db, OWNER, "s11", "usr_late2", "no_show").awarded).toBe(0);
+    expect(getMe(db, "usr_late2").points).toBe(JOIN_POINTS);
+
+    expect(checkInShift(db, OWNER, "s11", "usr_late2", "attended").awarded).toBe(24);
+    expect(getMe(db, "usr_late2").points).toBe(JOIN_POINTS + 24);
+  });
+
+  it("locks the record once attendance is filed", () => {
+    makeProfile("usr_att");
+    signupShift(db, "usr_att", "s11");
+    checkInShift(db, OWNER, "s11", "usr_att", "attended");
+
+    expect(() => cancelShift(db, "usr_att", "s11")).toThrowError(/final/);
+  });
+
+  it("refuses a member who is not a steward", () => {
+    makeProfile("usr_plain");
+    joinLeague(db, "usr_plain", "harbor");
+    makeProfile("usr_vol2");
+    signupShift(db, "usr_vol2", "s11");
+
+    expect(() => checkInShift(db, "usr_plain", "s11", "usr_vol2", "attended")).toThrowError(/steward/);
+  });
+
+  it("credits the volunteer's chapter and exposes the sealed roster", () => {
+    makeProfile("usr_ch2", "nb_city-centre");
+    signupShift(db, "usr_ch2", "s11");
+    checkInShift(db, OWNER, "s11", "usr_ch2", "attended");
+
+    expect(getMe(db, "usr_ch2").memberships[0].chapterId).toBe("ch_harbor_2");
+
+    const roster = getShiftRoster(db, OWNER, "s11");
+    expect(roster.sealed).toBe(2);
+    expect(
+      roster.entries.some(
+        (entry) => entry.profile.id === "usr_ch2" && entry.status === "attended" && entry.hours === 2,
+      ),
+    ).toBe(true);
+  });
+
+  it("seeds one steward per chapter", () => {
+    const members = listMembers(db, "harbor");
+    expect(members.filter((member) => member.role === "owner")).toHaveLength(1);
+    expect(members.filter((member) => member.role === "steward")).toHaveLength(2);
   });
 });

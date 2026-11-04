@@ -47,6 +47,7 @@ test("no horizontal overflow at phone widths", async ({ page }) => {
       "/leagues/harbor/chapters",
       "/leagues/harbor/members",
       "/leagues/harbor/impact",
+      "/leagues/harbor/steward",
       "/dashboard",
       "/login",
       "/register",
