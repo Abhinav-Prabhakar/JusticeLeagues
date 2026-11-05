@@ -8,6 +8,9 @@ import type {
   DataExportDTO,
   FeatureFlagDTO,
   NotificationInboxDTO,
+  PilotNoteDTO,
+  PilotNoteKind,
+  PulseDTO,
   ReportDTO,
   ReportReason,
   ReportStatus,
@@ -1036,5 +1039,50 @@ export function useDeleteAccount() {
       patchEdition(client, (edition) => ({ ...edition, me: null }));
       void client.invalidateQueries();
     },
+  });
+}
+
+// ---- Phase 6: the pulse, pilot notes, and the crash desk -----------------
+
+export function useAdminPulse(days = 28, enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "pulse", days],
+    queryFn: () => api<PulseDTO>(`/api/admin/pulse?days=${days}`),
+    enabled: enabled && !STATIC_PREVIEW,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export interface PilotNoteInput {
+  body: string;
+  kind?: PilotNoteKind;
+  leagueId?: string | null;
+}
+
+export function useAddPilotNote() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: (input: PilotNoteInput) =>
+      api<PilotNoteDTO>("/api/admin/pulse/notes", { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin", "pulse"] });
+      toast("Pilot note filed for the weekly loop");
+    },
+    onError: (error) => toast(error.message),
+  });
+}
+
+export function useResolveError() {
+  const client = useQueryClient();
+  const { toast } = useApp();
+  return useMutation({
+    mutationFn: (id: string) => api<{ resolved: true }>(`/api/admin/errors/${id}/resolve`, { method: "POST" }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin", "pulse"] });
+      toast("Crash report closed");
+    },
+    onError: (error) => toast(error.message),
   });
 }

@@ -1,49 +1,65 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
   BadgeCheck,
   Ban,
   Check,
   ClipboardList,
+  DatabaseBackup,
   EyeOff,
   Flag,
   Gavel,
+  HeartPulse,
   KeyRound,
   Loader2,
+  NotebookPen,
   RotateCcw,
   Scale,
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Users,
   X,
 } from "lucide-react";
 import { fmt } from "../data";
 import { handleLabel } from "../lib/api";
 import {
+  useAddPilotNote,
   useAdminOverview,
+  useAdminPulse,
   useAdminReports,
   useEdition,
   useAdminUsers,
   useAuditLog,
   useFeatureFlags,
   useHandleReport,
+  useResolveError,
   useRestoreUser,
   useRestrictUser,
   useSetFeatureFlag,
   useSetUserRole,
 } from "../lib/queries";
-import type { AdminUserDTO, FeatureFlagDTO, ReportDTO, ReportStatus } from "../lib/types";
+import type {
+  AdminUserDTO,
+  FeatureFlagDTO,
+  PilotNoteKind,
+  PulseStageDTO,
+  ReportDTO,
+  ReportStatus,
+} from "../lib/types";
 import { usePageTitle } from "../lib/usePageTitle";
 import { CountUp, SectionHead } from "../ui";
 import { cn } from "../utils/cn";
 
-type Tab = "overview" | "reports" | "people" | "flags" | "audit";
+type Tab = "overview" | "pulse" | "reports" | "people" | "flags" | "audit";
 
 const TABS: { id: Tab; label: string; icon: typeof Scale }[] = [
   { id: "overview", label: "Overview", icon: Scale },
+  { id: "pulse", label: "Pulse", icon: Activity },
   { id: "reports", label: "Reports", icon: Flag },
   { id: "people", label: "People", icon: Users },
   { id: "flags", label: "Flags", icon: SlidersHorizontal },
@@ -143,6 +159,7 @@ export default function Admin() {
       </div>
 
       {tab === "overview" && <Overview />}
+      {tab === "pulse" && <Pulse />}
       {tab === "reports" && <ReportQueue />}
       {tab === "people" && <People />}
       {tab === "flags" && <Flags />}
@@ -200,6 +217,312 @@ function Overview() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+const pct = (value: number | null, digits = 0) =>
+  value === null || Number.isNaN(value) ? "—" : `${(value * 100).toFixed(digits)}%`;
+
+function bytes(value: number): string {
+  if (value >= 1_048_576) return `${(value / 1_048_576).toFixed(1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${value} B`;
+}
+
+function ageLabel(hours: number | null): string {
+  if (hours === null) return "never";
+  if (hours < 1) return "just now";
+  if (hours < 48) return `${Math.round(hours)}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function Pulse() {
+  const [days, setDays] = useState(28);
+  const { data, isPending, isError } = useAdminPulse(days);
+  const addNote = useAddPilotNote();
+  const resolve = useResolveError();
+  const [draft, setDraft] = useState({ kind: "note" as PilotNoteKind, body: "", leagueId: "" });
+
+  if (isPending) return <Skeleton label="Reading the pulse" />;
+  if (isError || !data) return <Failure message="The pulse could not be read. The API may still be starting." />;
+
+  const peak = Math.max(...data.funnel.map((stage) => stage.count), 1);
+  const kpis = [
+    { label: "Spots filled", value: pct(data.liquidity.fillRate), hint: `${fmt(data.liquidity.filled)} of ${fmt(data.liquidity.capacity)}`, icon: Users },
+    { label: "Show-up rate", value: pct(data.reliability.showUpRate), hint: `${fmt(data.reliability.attended)} attended`, icon: Check },
+    { label: "4-week active", value: pct(data.retention.rate), hint: `${fmt(data.retention.active4w)} of ${fmt(data.retention.activeMembers)}`, icon: HeartPulse },
+    { label: "JP per member", value: fmt(data.integrity.pointsPerMember), hint: `${fmt(data.integrity.points)} total`, icon: Sparkles },
+    { label: "Reversals", value: pct(data.integrity.reversalRate, 1), hint: `${fmt(data.integrity.reversals)} of ${fmt(data.integrity.ledgerRows)} rows`, icon: RotateCcw },
+    { label: "Reports", value: `${data.integrity.reportsPer100Members}`, hint: "per 100 members", icon: Flag },
+  ];
+
+  return (
+    <div className="space-y-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="kicker text-vermilion">Private, local, aggregate</div>
+          <p className="text-ink-2 mt-1 max-w-2xl font-serif text-sm">
+            The funnel below is the only view telemetry in the app. It stores a page name and an action name — no IP,
+            user agent, cross-site identifier, or third-party SDK. Nothing leaves this machine.
+          </p>
+        </div>
+        <div className="border-ink bg-paper flex rounded-full border-2 p-0.5">
+          {[7, 28, 90].map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setDays(option)}
+              aria-pressed={days === option}
+              className={cn(
+                "rounded-full px-3 py-1.5 font-sans text-[10px] font-extrabold tracking-wider uppercase transition-colors",
+                days === option ? "bg-ink text-paper" : "text-ink-2 hover:bg-paper-2",
+              )}
+            >
+              {option}d
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          return (
+            <div key={kpi.label} className="border-ink bg-paper flex items-center gap-3 border-2 px-4 py-3">
+              <span className="bg-paper-3 text-ink grid h-10 w-10 shrink-0 place-items-center rounded-full">
+                <Icon size={16} />
+              </span>
+              <div className="min-w-0">
+                <div className="font-display text-2xl leading-none font-black tabular-nums">{kpi.value}</div>
+                <div className="kicker text-ink-3 mt-1 text-[8px]">{kpi.label}</div>
+                <div className="text-ink-3 mt-0.5 font-mono text-[9px]">{kpi.hint}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <section className="border-ink bg-paper border-2">
+          <div className="border-ink flex items-center justify-between border-b-2 px-4 py-3">
+            <div>
+              <div className="kicker text-ink-3 text-[8px]">Activation &amp; engagement</div>
+              <h3 className="font-display text-2xl leading-tight font-black">The funnel</h3>
+            </div>
+            <span className="text-ink-3 font-mono text-[10px]">{days} days · {fmt(data.homeViews)} front pages</span>
+          </div>
+          <ol className="space-y-3 px-4 py-4">
+            {data.funnel.map((stage: PulseStageDTO) => (
+              <li key={stage.key}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-display text-sm font-bold">{stage.label}</span>
+                  <span className="font-mono text-[11px] tabular-nums">{fmt(stage.count)}</span>
+                </div>
+                <div className="bg-paper-3 mt-1 h-2 w-full overflow-hidden">
+                  <div
+                    className="bg-vermilion h-full transition-[width] duration-500"
+                    style={{ width: `${Math.max(stage.count > 0 ? 2 : 0, Math.min(100, (stage.count / peak) * 100))}%` }}
+                  />
+                </div>
+                <div className="text-ink-3 mt-0.5 font-mono text-[9px]">
+                  {stage.conversion === null ? "first step" : `${pct(stage.conversion)} of the previous step`}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="border-ink bg-paper border-2">
+          <div className="border-ink border-b-2 px-4 py-3">
+            <div className="kicker text-ink-3 text-[8px]">Operations</div>
+            <h3 className="font-display text-2xl leading-tight font-black">Press health</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-4 font-mono text-[10px]">
+            <HealthStat label="Database" value={bytes(data.health.databaseBytes)} icon={<DatabaseBackup size={13} />} />
+            <HealthStat label="WAL" value={bytes(data.health.walBytes)} />
+            <HealthStat label="Migrations" value={`${data.health.migrations}`} />
+            <HealthStat
+              label="Backup"
+              value={`${ageLabel(data.health.backupAgeHours)} · ${data.health.backupCount}`}
+            />
+            <HealthStat label="Uptime" value={`${Math.max(1, Math.round(data.health.uptimeSeconds / 3600))}h`} />
+            <HealthStat label="Open crashes" value={`${data.errors.length}`} />
+          </div>
+          <p className="border-ink/15 text-ink-3 border-t px-4 py-2.5 font-mono text-[9px]">
+            {data.health.latestBackupAt
+              ? `latest snapshot ${new Date(data.health.latestBackupAt).toLocaleString("en-US")}`
+              : "no snapshot yet — run npm run db:backup"}
+          </p>
+        </section>
+      </div>
+
+      <section className="border-ink bg-paper border-2">
+        <div className="border-ink flex flex-wrap items-center justify-between gap-2 border-b-2 px-4 py-3">
+          <div>
+            <div className="kicker text-ink-3 text-[8px]">The pilot three</div>
+            <h3 className="font-display text-2xl leading-tight font-black">Leagues carrying the edition</h3>
+          </div>
+          <span className="text-ink-3 font-mono text-[10px]">ranked by all-time points</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-left">
+            <thead>
+              <tr className="border-ink/20 border-b">
+                {["League", "Members", "Shifts", "Signups", "Points", "Last activity"].map((head) => (
+                  <th key={head} className="kicker text-ink-3 px-3 py-2 text-[8px]">{head}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.pilots.map((pilot) => (
+                <tr key={pilot.leagueId} className="border-ink/10 border-b last:border-0">
+                  <td className="px-3 py-2.5">
+                    <Link to={`/leagues/${pilot.leagueId}`} className="font-display font-bold underline-offset-2 hover:underline">
+                      {pilot.leagueName}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] tabular-nums">{fmt(pilot.members)}</td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] tabular-nums">{fmt(pilot.shifts)}</td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] tabular-nums">{fmt(pilot.signups)}</td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] font-semibold tabular-nums">{fmt(pilot.points)}</td>
+                  <td className="text-ink-3 px-3 py-2.5 font-mono text-[9px]">
+                    {pilot.lastActivity ? shortDate(pilot.lastActivity) : "quiet"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="border-ink bg-paper border-2">
+          <div className="border-ink border-b-2 px-4 py-3">
+            <div className="kicker text-ink-3 text-[8px]">Client crashes</div>
+            <h3 className="font-display text-2xl leading-tight font-black">The crash desk</h3>
+          </div>
+          {data.errors.length === 0 ? (
+            <div className="grid place-items-center gap-2 px-4 py-10 text-center">
+              <Check size={20} className="text-forest" />
+              <p className="font-display text-ink-3 italic">No open crashes. The press is quiet.</p>
+            </div>
+          ) : (
+            <ul className="divide-ink/15 divide-y">
+              {data.errors.map((error) => (
+                <li key={error.id} className="flex flex-wrap items-start gap-2 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display text-sm leading-tight font-bold">{error.message}</p>
+                    <p className="text-ink-3 mt-0.5 truncate font-mono text-[9px]">
+                      {error.path || "unknown path"} · {shortDate(error.createdAt)}
+                      {error.requestId ? ` · ${error.requestId}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => resolve.mutate(error.id)}
+                    disabled={resolve.isPending}
+                    aria-label={`Close crash report: ${error.message}`}
+                    className="btn-press border-ink/40 text-ink-2 hover:border-forest hover:text-forest shrink-0 rounded-full border-2 px-2.5 py-1 font-sans text-[8px] font-extrabold tracking-wider uppercase disabled:opacity-40"
+                  >
+                    Close
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="border-ink bg-paper border-2">
+          <div className="border-ink border-b-2 px-4 py-3">
+            <div className="kicker text-ink-3 text-[8px]">The weekly loop</div>
+            <h3 className="font-display text-2xl leading-tight font-black">Pilot notes</h3>
+          </div>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (draft.body.trim().length < 3) return;
+              addNote.mutate(
+                { body: draft.body, kind: draft.kind, leagueId: draft.leagueId || null },
+                { onSuccess: () => setDraft({ kind: draft.kind, body: "", leagueId: draft.leagueId }) },
+              );
+            }}
+            className="space-y-2 px-4 py-3"
+          >
+            <label className="block">
+              <span className="kicker text-ink-3 text-[8px]">What did the pilot teach us this week?</span>
+              <textarea
+                rows={2}
+                maxLength={800}
+                required
+                minLength={3}
+                value={draft.body}
+                onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+                placeholder="A steward asked for a printable roster; two signups came from the Atlas radius filter."
+                className="border-ink bg-paper mt-1 w-full resize-y border-2 px-2.5 py-2 font-serif text-sm"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={draft.kind}
+                onChange={(event) => setDraft({ ...draft, kind: event.target.value as PilotNoteKind })}
+                aria-label="Note kind"
+                className="border-ink bg-paper border-2 px-2 py-1.5 font-sans text-[10px]"
+              >
+                <option value="note">Note</option>
+                <option value="friction">Friction</option>
+                <option value="win">Win</option>
+              </select>
+              <select
+                value={draft.leagueId}
+                onChange={(event) => setDraft({ ...draft, leagueId: event.target.value })}
+                aria-label="League"
+                className="border-ink bg-paper min-w-0 flex-1 border-2 px-2 py-1.5 font-sans text-[10px]"
+              >
+                <option value="">Citywide</option>
+                {data.pilots.map((pilot) => (
+                  <option key={pilot.leagueId} value={pilot.leagueId}>{pilot.leagueName}</option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                disabled={addNote.isPending || draft.body.trim().length < 3}
+                className="btn-press border-ink bg-ink text-paper flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 font-sans text-[9px] font-extrabold tracking-wider uppercase disabled:opacity-40"
+              >
+                <NotebookPen size={11} /> {addNote.isPending ? "Filing…" : "File note"}
+              </button>
+            </div>
+          </form>
+          {data.notes.length > 0 && (
+            <ul className="border-ink/15 divide-ink/10 divide-y border-t">
+              {data.notes.map((note) => (
+                <li key={note.id} className="px-4 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="bg-paper-3 text-ink-2 rounded-full px-2 py-0.5 font-sans text-[8px] font-extrabold tracking-wider uppercase">
+                      {note.kind}
+                    </span>
+                    <span className="text-ink-3 font-mono text-[9px]">
+                      {note.leagueName ?? "citywide"} · week {note.week}
+                    </span>
+                  </div>
+                  <p className="text-ink-2 mt-1 font-serif text-sm">{note.body}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function HealthStat({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div>
+      <div className="kicker text-ink-3 flex items-center gap-1 text-[8px]">
+        {icon} {label}
+      </div>
+      <div className="mt-0.5 font-semibold tabular-nums">{value}</div>
     </div>
   );
 }

@@ -54,6 +54,29 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const isUnauthenticated = (error: unknown) =>
   error instanceof ApiError && (error.status === 401 || error.code === "unauthenticated");
 
+/**
+ * Send a crash to the local desk. Best effort only: a failed report must never
+ * mask the original error or trap the reader in a second failure.
+ */
+export async function reportClientError(input: {
+  message: string;
+  stack?: string;
+  component?: string;
+  path?: string;
+}): Promise<void> {
+  if (STATIC_PREVIEW) return;
+  try {
+    await fetch("/api/errors", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      keepalive: true,
+    });
+  } catch {
+    // Offline or shutting down; the console trace still exists.
+  }
+}
+
 /** The edition before the server answers, so the page never flashes empty. */
 export function initialEdition(): EditionDTO {
   const leagues: LeagueDTO[] = LEAGUES.map((league) => {

@@ -77,6 +77,7 @@ export function Lead() {
         id={l.photo}
         w={1400}
         h={760}
+        priority
         alt="Volunteers cleaning a riverbank"
         className="border-ink aspect-[16/9] w-full border-2"
       >

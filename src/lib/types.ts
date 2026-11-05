@@ -508,3 +508,128 @@ export interface AnomalyDTO {
   resolvedAt: string | null;
   resolutionNote: string;
 }
+
+// ---- Phase 6: observability, the pilot funnel, and operations ------------
+
+export type PulseEventName =
+  | "home_view"
+  | "atlas_view"
+  | "league_view"
+  | "chapter_view"
+  | "ledger_view"
+  | "register_view"
+  | "auth_register"
+  | "league_join"
+  | "shift_signup"
+  | "shift_checkin"
+  | "project_submit"
+  | "project_approve"
+  | "resource_post"
+  | "resource_claim"
+  | "resource_fulfil"
+  | "report_file";
+
+export interface PulseStageDTO {
+  key: string;
+  label: string;
+  count: number;
+  /** Share of the previous stage, or null when that stage had no traffic. */
+  conversion: number | null;
+  /** Share of the first stage in the funnel. */
+  fromStart: number | null;
+}
+
+export interface PulsePilotDTO {
+  leagueId: string;
+  leagueName: string;
+  points: number;
+  members: number;
+  projects: number;
+  shifts: number;
+  signups: number;
+  lastActivity: string | null;
+}
+
+export interface PulseMetricsDTO {
+  windowDays: number;
+  since: string;
+  homeViews: number;
+  funnel: PulseStageDTO[];
+  liquidity: {
+    openShifts: number;
+    openFutureShifts: number;
+    capacity: number;
+    filled: number;
+    openSpots: number;
+    fillRate: number;
+    shiftsWithSignup48h: number;
+    within48hRate: number;
+  };
+  reliability: {
+    attended: number;
+    noShow: number;
+    cancelled: number;
+    showUpRate: number;
+  };
+  retention: {
+    activeMembers: number;
+    active4w: number;
+    rate: number;
+  };
+  integrity: {
+    points: number;
+    activeMembers: number;
+    pointsPerMember: number;
+    ledgerRows: number;
+    reversals: number;
+    reversalRate: number;
+    openAnomalies: number;
+    reports: number;
+    reportsPer100Members: number;
+  };
+  pilots: PulsePilotDTO[];
+}
+
+export interface OpsHealthDTO {
+  databaseBytes: number;
+  walBytes: number;
+  migrations: number;
+  backupCount: number;
+  latestBackupAt: string | null;
+  latestBackupBytes: number;
+  backupAgeHours: number | null;
+  uptimeSeconds: number;
+  node: string;
+  startedAt: string;
+}
+
+export interface ErrorReportDTO {
+  id: string;
+  profileId: string | null;
+  message: string;
+  stack: string;
+  component: string;
+  path: string;
+  requestId: string;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+export type PilotNoteKind = "note" | "friction" | "win";
+
+export interface PilotNoteDTO {
+  id: string;
+  leagueId: string | null;
+  leagueName: string | null;
+  authorName: string | null;
+  kind: PilotNoteKind;
+  body: string;
+  week: string;
+  createdAt: string;
+}
+
+export interface PulseDTO extends PulseMetricsDTO {
+  health: OpsHealthDTO;
+  errors: ErrorReportDTO[];
+  notes: PilotNoteDTO[];
+}

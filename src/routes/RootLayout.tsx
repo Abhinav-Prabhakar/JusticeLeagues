@@ -5,8 +5,11 @@ import { Drawer } from "../components/Drawer";
 import { Footer } from "../components/Footer";
 import { RouteSkeleton } from "../components/RouteSkeleton";
 import { ScrollToTop } from "../components/ScrollToTop";
+import { usePagePulse } from "../lib/pulse";
 
 export function RootLayout() {
+  usePagePulse();
+
   return (
     <div id="top">
       <a href="#main" className="skip-link">

@@ -15,6 +15,7 @@ import { materializeSealedLedger } from "./sealed";
 import { rebuildStandings } from "./standings";
 import { rebuildLeagueSearch } from "./search-index";
 import { CITY_CENTRE, HOOD_COORDS, hoodCoords } from "../../src/data/geo";
+import { pruneOperationalData } from "./pulse";
 
 const CITY = { id: "city_millbrook", name: "Millbrook", slug: "millbrook", lat: 43.6532, lng: -79.3832 };
 
@@ -357,4 +358,13 @@ export function ensurePhase5(db: Db): { flags: number; editor: boolean } {
     const { count } = db.prepare("SELECT COUNT(*) AS count FROM feature_flags").get() as { count: number };
     return { flags: Number(count), editor };
   });
+}
+
+/**
+ * Startup hook for Phase 6. The operational tables are intentionally small:
+ * expired page events and resolved crash reports are pruned, while the public
+ * record (ledger, reports, audit) is never touched.
+ */
+export function ensurePhase6(db: Db): { events: number; errors: number } {
+  return transaction(db, () => pruneOperationalData(db));
 }

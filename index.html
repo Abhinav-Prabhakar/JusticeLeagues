@@ -7,7 +7,25 @@
       name="description"
       content="Justice Leagues — form or join local leagues, coordinate volunteer shifts, and track collective impact."
     />
+    <meta name="theme-color" content="#f4eee1" />
     <link rel="stylesheet" href="%BASE_URL%fonts/fonts.css" />
+    <!-- The lead photograph and the two faces above the fold: discover them
+         before the SPA bundle parses so the LCP element is not late. -->
+    <link rel="preload" as="image" href="%BASE_URL%photos/36713110.jpg" fetchpriority="high" />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="%BASE_URL%fonts/adf7264998fb.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="%BASE_URL%fonts/ab68f14ec71c.woff2"
+      crossorigin
+    />
     <title>The Justice Leagues — Organised neighbours. Measured impact.</title>
   </head>
   <body>
