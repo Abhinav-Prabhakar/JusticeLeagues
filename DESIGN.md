@@ -99,26 +99,29 @@ Defined in `src/index.css` under `@theme`. Never hard-code these values.
 
 **Paper / ink**
 
-| Token     | Value     | Use                 |
-| --------- | --------- | ------------------- |
-| `paper`   | `#f4eee1` | page                |
-| `paper-2` | `#ebe2cd` | wells, hovers       |
-| `paper-3` | `#ddd1b5` | rules, empty states |
-| `ink`     | `#14110d` | type, borders       |
-| `ink-2`   | `#4a4338` | secondary           |
+| Token     | Value     | Use                                 |
+| --------- | --------- | ----------------------------------- |
+| `paper`   | `#f4eee1` | page                                |
+| `paper-2` | `#ebe2cd` | wells, hovers                       |
+| `paper-3` | `#ddd1b5` | rules, empty states                 |
+| `ink`     | `#14110d` | type, borders                       |
+| `ink-2`   | `#4a4338` | secondary                           |
 | `ink-3`   | `#605747` | tertiary / captions (AA on paper-3) |
 
 **Editorial accents**
 
-| Token       | Value     | Use                        |
-| ----------- | --------- | -------------------------- |
-| `vermilion` | `#b82d19` | breaking, live, energy (AA text) |
-| `cobalt`    | `#2347c5` | safety / civic             |
-| `mustard`   | `#f2b705` | points, medals, highlights |
+| Token       | Value     | Use                                |
+| ----------- | --------- | ---------------------------------- |
+| `vermilion` | `#b82d19` | breaking, live, energy (AA text)   |
+| `cobalt`    | `#2347c5` | safety / civic                     |
+| `mustard`   | `#f2b705` | points, medals, highlights         |
 | `forest`    | `#14694d` | climate / positive delta (AA text) |
-| `rose`      | `#e0607e` | housing                    |
-| `violet`    | `#7a3fb0` | learning                   |
-| `teal`      | `#0f8b9d` | health                     |
+| `rose`      | `#e0607e` | housing                            |
+| `violet`    | `#7a3fb0` | learning                           |
+| `teal`      | `#0f8b9d` | health                             |
+
+Cause colours live in `CAUSES` (`src/data.ts`) and must match the palette above.
+`onColor(background)` picks paper or ink for type and icons on a cause fill.
 
 **Type**
 
@@ -150,7 +153,9 @@ Every new component must pass all of these before review.
 - [ ] Hover-only content also available on focus and tap.
 - [ ] `aria-pressed` / `aria-expanded` / `aria-label` where state is visual.
 - [ ] Contrast ≥ 4.5:1 for text, ≥ 3:1 for large text and UI edges.
+- [ ] Type on a cause colour uses `onColor()`; never assume paper reads on mustard.
 - [ ] Colour never the only signal — pair with icon, shape, or label.
+- [ ] Contact details for a young neighbour never render; use `handleLabel()`.
 - [ ] Images have `alt`; decorative SVG is `aria-hidden`.
 - [ ] Fixed aspect ratios; no layout shift; lazy images below the fold.
 - [ ] Numbers use `tabular-nums` and `toLocaleString`.
@@ -163,21 +168,25 @@ Every new component must pass all of these before review.
 
 ## 5. Reusable patterns
 
-| Pattern             | Source                    | Notes                                  |
-| ------------------- | ------------------------- | -------------------------------------- |
-| Masthead / dateline | `Masthead.tsx`            | date left, volume right, thick rule    |
-| Section head        | `lib.tsx → SectionHead`   | double rule, kicker, italic title      |
-| Cause emblem        | `lib.tsx → Emblem`        | roundel default; shield / hex variants |
-| Halftone photo      | `lib.tsx → Photo`         | hover colour reveal                    |
-| Count-up            | `lib.tsx → CountUp`       | in-view triggered, `tabular-nums`      |
-| Sparkline           | `lib.tsx → Sparkline`     | draw-on-play, no axes                  |
-| Reveal              | `lib.tsx → Reveal`        | in-view fade/rise, once                |
-| Expand row          | `.expand` + `[data-open]` | grid-rows, no JS height math           |
-| Ticket stub         | `Dispatch.tsx`            | perforated edge + cause colour         |
-| Chip filter         | `Masthead.tsx → NavChip`  | icon collapsed, label on hover/active  |
-| Hard-shadow button  | `.btn-press`              | press-down physics                     |
-| Drawer              | `Drawer.tsx`              | right sheet, ESC + backdrop close      |
-| Toast               | `ctx.tsx`                 | bottom-centre, single at a time        |
+| Pattern             | Source                     | Notes                                   |
+| ------------------- | -------------------------- | --------------------------------------- |
+| Masthead / dateline | `Masthead.tsx`             | date left, volume right, thick rule     |
+| Section head        | `lib.tsx → SectionHead`    | double rule, kicker, italic title       |
+| Cause emblem        | `lib.tsx → Emblem`         | roundel default; shield / hex variants  |
+| Halftone photo      | `lib.tsx → Photo`          | hover colour reveal                     |
+| Count-up            | `lib.tsx → CountUp`        | in-view triggered, `tabular-nums`       |
+| Sparkline           | `lib.tsx → Sparkline`      | draw-on-play, no axes                   |
+| Reveal              | `lib.tsx → Reveal`         | in-view fade/rise, once                 |
+| Expand row          | `.expand` + `[data-open]`  | grid-rows, no JS height math            |
+| Ticket stub         | `Dispatch.tsx`             | perforated edge + cause colour          |
+| Chip filter         | `Masthead.tsx → NavChip`   | icon collapsed, label on hover/active   |
+| Hard-shadow button  | `.btn-press`               | press-down physics                      |
+| Drawer              | `Drawer.tsx`               | right sheet, ESC + backdrop close       |
+| Toast               | `ctx.tsx`                  | bottom-centre, single at a time         |
+| Inbox row           | `Inbox.tsx`                | kind icon, unread dot, destination link |
+| Report dialog       | `ReportButton.tsx`         | modal, ESC close, focus returns to flag |
+| Desk tabs           | `Admin.tsx`                | URL-synced, `aria-pressed`, one panel   |
+| Policy page         | `Privacy.tsx`, `Terms.tsx` | plain-language sections, data controls  |
 
 When adding a pattern, add it here and give it one home. No copy-paste variants.
 

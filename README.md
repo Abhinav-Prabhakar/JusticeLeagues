@@ -4,14 +4,14 @@
 
 <div align="center">
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
-  <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=1b7f5c" alt="Last commit" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=d9381e" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-98_unit_%C2%B7_24_e2e-1b7f5c?style=flat-square&labelColor=14110d" alt="Tests" />
+  <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=14694d" alt="Last commit" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=b82d19" alt="License" /></a>
+  <img src="https://img.shields.io/badge/tests-113_unit_%C2%B7_28_e2e-14694d?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
-  <img src="https://img.shields.io/badge/node-%E2%89%A522.5-1b7f5c?style=flat-square&labelColor=14110d" alt="Node 22.5+" />
-  <a href="https://abhinav-prabhakar.github.io/JusticeLeagues/"><img src="https://img.shields.io/badge/static_edition-live-1b7f5c?style=flat-square&labelColor=14110d" alt="Static edition" /></a>
+  <img src="https://img.shields.io/badge/node-%E2%89%A522.5-14694d?style=flat-square&labelColor=14110d" alt="Node 22.5+" />
+  <a href="https://abhinav-prabhakar.github.io/JusticeLeagues/"><img src="https://img.shields.io/badge/static_edition-live-14694d?style=flat-square&labelColor=14110d" alt="Static edition" /></a>
 </div>
 
 <h3 align="center">A local-first civic newspaper for citywide leagues, neighbourhood chapters,<br/>volunteer shifts, and Justice Points.</h3>
@@ -42,6 +42,12 @@
 - **Badges and weeks on.** Thirteen badges and a streak are earned from the record, not handed out. Your desk shows what you have and what is next.
 - **A public record.** Every award lands on [`/ledger`](src/routes/LedgerPage.tsx) with its author, kind, and delta. A steward correction appends a negative row; it never rewrites history.
 - **A review desk, not a rubber stamp.** Soft caps and evidence-free projects queue for a steward, who can clear or reverse with an auditable note.
+- **A postbag that fills itself.** Every signup, approval, reminder, waitlist promotion, and moderation decision writes an inbox row inside the same transaction as the action. The masthead bell counts what is unread.
+- **A report, not a takedown.** Any signed-in neighbour can flag a resource, project, or shift. A report never hides anything by itself; a steward or the editor decides, and hiding keeps the record.
+- **An editor's desk for strangers.** The [`/admin`](src/routes/Admin.tsx) console lists open reports, people, feature flags, and the audit log. Three upheld strikes pause posting for a fortnight; the editor can restore early. Every action writes an audit row.
+- **Safeguarding by default.** Registration needs an age confirmation; 16- and 17-year-olds need guardian consent, and their handle and email are withheld from every public roster, ledger entry, and admin row.
+- **Your data, in your hands.** [`/privacy`](src/routes/Privacy.tsx) explains exactly what the local paper keeps, exports it as JSON, and deletes the account while anonymising the ledger. [`/terms`](src/routes/Terms.tsx) is the house rules in plain language.
+- **WCAG 2.2 AA, not aspirational.** Every route scores 100 in Lighthouse accessibility: keyboard reachable, focus visible, touch targets sized, contrast checked, headings in order.
 - **A real impact page.** Chapter, category, and month totals are aggregated from the ledger, and the chapter bars always sum to the league total.
 - **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12 (capped at 80); an approved project awards `50 + 4×hours + 2×people`, clamped 50–500.
 
@@ -69,6 +75,14 @@
   <tr>
     <td width="50%"><a href="docs/screenshots/invite.webp"><img src="docs/screenshots/invite.webp" alt="A single-use league invitation with the invited chapter and role" /></a><br/><sub><b>The invitation</b> · a single-use link, filed under a chapter</sub></td>
     <td width="50%"><a href="docs/screenshots/settings.webp"><img src="docs/screenshots/settings.webp" alt="League settings for identity, recruiting, and archiving" /></a><br/><sub><b>The masthead</b> · stewards edit, the owner archives</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/inbox.webp"><img src="docs/screenshots/inbox.webp" alt="The notification inbox with unread notices, filters, and mark-all-read" /></a><br/><sub><b>The inbox</b> · signups, reminders, and moderation notices</sub></td>
+    <td width="50%"><a href="docs/screenshots/admin-reports.webp"><img src="docs/screenshots/admin-reports.webp" alt="The editor's report queue with dismiss, hide, and hide-plus-strike decisions" /></a><br/><sub><b>The editor's desk</b> · reports, strikes, flags, and audit</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/privacy.webp"><img src="docs/screenshots/privacy.webp" alt="Privacy and data controls with export and delete" /></a><br/><sub><b>Privacy &amp; data</b> · what is kept, exported, and deleted</sub></td>
+    <td width="50%"><a href="docs/screenshots/terms.webp"><img src="docs/screenshots/terms.webp" alt="The house rules in plain language" /></a><br/><sub><b>House rules</b> · the charter in practice</sub></td>
   </tr>
   <tr>
     <td colspan="2"><a href="docs/screenshots/leagues.webp"><img src="docs/screenshots/leagues.webp" alt="The Atlas with search, cause filters, a radius filter, and distance labels" /></a><br/><sub><b>The Atlas</b> · search, causes, and a walkable radius</sub></td>
@@ -155,17 +169,18 @@ A fresh seed gives every chapter a steward. The founding chapter's steward owns 
 steward.harbor.1@justiceleagues.local   # owner, Mill River Docks
 steward.harbor.2@justiceleagues.local   # steward, City Centre
 steward.harbor.3@justiceleagues.local   # steward, Eastside
+admin@justiceleagues.local              # the editor's desk
 ```
 
-Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`3` for a chapter. These are local demo accounts — nothing leaves the machine.
+Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`3` for a chapter. These are local demo accounts — nothing leaves the machine. The editor can open `/admin` to see reports, strikes, flags, and the audit log.
 
 ## Checks
 
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 98 unit + API integration tests
-npm run test:e2e   # 24 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 113 unit + API integration tests
+npm run test:e2e   # 28 Playwright tests, isolated :8788 / :5174 / data/e2e.db
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

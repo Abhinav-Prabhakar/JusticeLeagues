@@ -78,6 +78,7 @@ await page.goto(`${base}/register?next=%2Fleagues%2Fharbor`);
 await page.getByLabel("Display name").fill("Ada Lovelace");
 await page.getByLabel("Email", { exact: true }).fill(email);
 await page.getByLabel("Password", { exact: true }).fill(password);
+await page.getByLabel(/i am 16 or older/i).check();
 await page.getByRole("button", { name: /open account/i }).click();
 await page.waitForURL(/\/leagues\/harbor$/);
 await page.getByRole("button", { name: /^join league$/i }).click();
@@ -119,6 +120,29 @@ await need.getByRole("button", { name: /^i can help$/i }).click();
 await page.getByText("Claimed — the poster can see your name").waitFor();
 await page.waitForTimeout(2000);
 await shoot(page, "resources", true);
+
+// File a report so the editor's queue has something real to show.
+const reported = page.locator("article").filter({ hasText: "Ladders, loppers" }).first();
+await reported.getByRole("button", { name: /^report/i }).click();
+await page.getByRole("dialog").getByLabel("What is wrong?").selectOption("spam");
+await page
+  .getByRole("dialog")
+  .getByLabel(/anything else/i)
+  .fill("This reads like a scrap listing, not a chapter offer.");
+await page
+  .getByRole("dialog")
+  .getByRole("button", { name: /send to the editor/i })
+  .click();
+await page.getByText(/report filed/i).waitFor();
+
+await page.goto(`${base}/inbox`);
+await shoot(page, "inbox", true);
+
+await page.goto(`${base}/privacy`);
+await shoot(page, "privacy", true);
+
+await page.goto(`${base}/terms`);
+await shoot(page, "terms", true);
 
 // Ada files a completed project; the steward will review it on the desk.
 await page.goto(`${base}/leagues/harbor/impact`);
@@ -197,6 +221,19 @@ await steward.getByRole("heading", { name: /league settings/i }).waitFor();
 await shoot(steward, "settings", true);
 await stewardContext.close();
 
+// The editor's desk, with the report still open.
+const editorContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+const editor = await editorContext.newPage();
+await editor.goto(`${base}/login`);
+await editor.getByLabel("Email", { exact: true }).fill("admin@justiceleagues.local");
+await editor.getByLabel("Password", { exact: true }).fill("millbrook");
+await editor.getByRole("button", { name: /^sign in$/i }).click();
+await editor.waitForURL(/\/dashboard$/);
+await editor.goto(`${base}/admin?tab=reports`);
+await editor.getByText("Ladders, loppers", { exact: false }).first().waitFor();
+await shoot(editor, "admin-reports", true);
+await editorContext.close();
+
 // Mobile viewports.
 const mobile = await browser.newContext({
   viewport: { width: 390, height: 844 },
@@ -209,6 +246,7 @@ await phone.goto(`${base}/register?next=%2Fleagues%2Fharbor`);
 await phone.getByLabel("Display name").fill("Grace Hopper");
 await phone.getByLabel("Email", { exact: true }).fill(`phone-${Date.now()}@example.com`);
 await phone.getByLabel("Password", { exact: true }).fill(password);
+await phone.getByLabel(/i am 16 or older/i).check();
 await phone.getByRole("button", { name: /open account/i }).click();
 await phone.waitForURL(/\/leagues\/harbor$/);
 

@@ -1,10 +1,13 @@
 # Justice Leagues — Prototype → Production Plan
 
-Status: **Phase 4 complete**. The ledger is the single source of truth, the
+Status: **Phase 5 complete**. The ledger is the single source of truth, the
 standings cache and leaderboard are real, badges and streaks are earned from
 the record, and stewards have an anomaly queue with an append-only reversal
-tool. The atlas now carries real coordinates, FTS5 discovery with distance
-filters, shareable chapter pages, and a printed league profile.
+tool. The atlas carries real coordinates, FTS5 discovery with distance
+filters, shareable chapter pages, and a printed league profile. The paper now
+runs itself: a transactional inbox, a report-and-review queue, an editor's desk
+with strikes and audit, account export/delete, safeguarding for young
+neighbours, and a WCAG 2.2 AA accessibility pass.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -328,16 +331,36 @@ a 5 km search to opening the nearest league and joining it. The same suite
 covers cause + radius filters, URL sync, geolocation, chapter pages, the print
 view, and phone-width overflow.
 
-### Phase 5 — Trust, comms, and operations (2 weeks)
+### Phase 5 — Trust, comms, and operations (2 weeks) — **complete**
 
-- In-app notifications inbox (signup, approval, reminder, waitlist promotion).
-- Moderation: report content, steward hide, admin queue, strike policy.
-- Admin console: users, leagues, reports, point reversals, feature flags.
-- Audit log; data export/delete; local privacy + terms; photo consent language.
-- Safeguarding: age gate, no minor contact details exposed, steward guidance.
-- Accessibility audit to WCAG 2.2 AA; fix all keyboard/touch parity gaps.
+- In-app notifications inbox (signup, approval, reminder, waitlist promotion). ✅
+  Every notice is a row written inside the transaction that caused it; the
+  masthead bell reads `MeDTO.unread` and the inbox filters all/unread.
+- Moderation: report content, steward hide, admin queue, strike policy. ✅
+  Reports dedupe per reporter and item; hiding keeps the record; three upheld
+  strikes pause posting for 14 days while reading, joining, and reporting stay
+  open.
+- Admin console: users, leagues, reports, point reversals, feature flags. ✅
+  `/admin` carries overview, reports, people, flags, and audit tabs; role
+  changes and self-demotion are guarded.
+- Audit log; data export/delete; local privacy + terms; photo consent language. ✅
+  `/privacy` exports a JSON copy and deletes the profile while anonymising the
+  ledger; `/terms` states the house rules; registration carries photo consent.
+- Safeguarding: age gate, no minor contact details exposed, steward guidance. ✅
+  Registration requires an age confirmation; teens require guardian consent;
+  handles and emails are masked in every DTO and fall back to display names.
+- Accessibility audit to WCAG 2.2 AA; fix all keyboard/touch parity gaps. ✅
+  Tokens darkened to AA, cause fills use `onColor()`, shape and scale controls
+  expose names and pressed state, headings are ordered, and every route scores
+  100 in Lighthouse accessibility.
 
-**Exit:** can operate with strangers without the founder manually fixing data.
+**Exit:** met — `e2e/phase5.spec.ts` walks a new account through the inbox, a
+reporter through the report form and the editor's hide decision, a 16-year-old
+through guardian consent and public masking, and every new page through a
+390px viewport with no overflow. The API suite covers the age gate, guardian
+consent, dedupe, strikes and restoration, admin gates, flags, audit, export,
+and delete. A stranger can now run a league without the founder editing the
+database by hand.
 
 ### Phase 6 — Hardening and launch (2 weeks)
 
@@ -441,8 +464,9 @@ rollback plan.
     badges, and the anomaly queue + public ledger page (Phase 3). ✅
 17. Add real coordinates, FTS5 search, shareable chapter pages, and the printed
     league profile (Phase 4). ✅
-18. Next: notifications, moderation, the admin console, safeguarding, and an
-    accessibility pass (Phase 5).
+18. Ship notifications, moderation, the admin console, safeguarding, and an
+    accessibility pass (Phase 5). ✅
+19. Next: performance, observability, load tests, and a pilot (Phase 6).
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded. **Met.**
