@@ -396,7 +396,7 @@ database by hand.
 
 **Exit:** met — the edition runs locally with real accounts, verified snapshots,
 a restore drill, a documented rollback path, and a weekly pilot loop. The unit
-suite covers 127 tests and Playwright covers 32, including the eight north-star
+suite covers 129 tests and Playwright covers 32, including the eight north-star
 actions and the LCP budget. `npm run load` passes with the capacity, waitlist,
 and leaderboard budgets intact.
 

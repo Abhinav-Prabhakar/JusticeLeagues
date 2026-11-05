@@ -186,6 +186,40 @@ describe("shift capacity under pressure", () => {
     const late = await post(`/api/shifts/${shift.id}/signup`, {}, grace.cookie);
     expect(late.status).toBe(409);
   });
+
+  it("rate-limits a burst of signup attempts from one account", async () => {
+    const ada = await register("ada@example.com", "Ada");
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect((await post("/api/shifts/s11/signup", {}, ada.cookie)).status).toBe(200);
+    }
+    expect((await post("/api/shifts/s11/signup", {}, ada.cookie)).status).toBe(429);
+  });
+
+  it("rate-limits a burst of new classifieds from one account", async () => {
+    const ada = await register("ada@example.com", "Ada");
+    await post("/api/leagues/harbor/join", {}, ada.cookie);
+
+    for (let index = 0; index < 20; index += 1) {
+      const created = await post(
+        "/api/leagues/harbor/resources",
+        {
+          chapterId: "ch_harbor",
+          kind: "offer",
+          title: `Burst listing ${index}`,
+          description: "A test listing for the write limit.",
+        },
+        ada.cookie,
+      );
+      expect(created.status, await created.clone().text()).toBe(201);
+    }
+
+    const blocked = await post(
+      "/api/leagues/harbor/resources",
+      { chapterId: "ch_harbor", kind: "offer", title: "One too many", description: "Should be blocked." },
+      ada.cookie,
+    );
+    expect(blocked.status).toBe(429);
+  });
 });
 
 describe("the private pulse", () => {

@@ -331,6 +331,23 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     await next();
   };
 
+  /**
+   * Authenticated writes are limited per profile, not per address, so one
+   * noisy neighbour behind a shared connection cannot close the door on
+   * everyone else. Reads are never limited here.
+   */
+  const writeLimit = (
+    suffix: string,
+    limit: number,
+    windowMs: number,
+  ): MiddlewareHandler<{ Variables: Variables }> => async (c, next) => {
+    const profile = c.get("profile")!;
+    if (!rateLimit(`usr:${profile.id}:${suffix}`, limit, windowMs)) {
+      return c.json({ error: "Slow down for a moment and try again.", code: "rate_limited" }, 429);
+    }
+    await next();
+  };
+
   app.get("/api/health", (c) => {
     const health = opsHealth(db, dbPath);
     return c.json({
@@ -485,7 +502,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json({ league, members: listMembers(db, league.id) });
   });
 
-  app.post("/api/leagues/:id/join", auth(), (c) => {
+  app.post("/api/leagues/:id/join", auth(), writeLimit("league-join", 20, 60_000), (c) => {
     const profile = c.get("profile")!;
     const result = joinLeague(db, profile.id, c.req.param("id"));
     if (result.joined) recordPulseEvent(db, "league_join", { profileId: profile.id, leagueId: c.req.param("id") });
@@ -497,7 +514,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json(leaveLeague(db, profile.id, c.req.param("id")));
   });
 
-  app.post("/api/leagues/:id/invites", auth(), async (c) => {
+  app.post("/api/leagues/:id/invites", auth(), writeLimit("invite", 10, 60_000), async (c) => {
     const profile = c.get("profile")!;
     const parsed = inviteSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
@@ -516,7 +533,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json(redeemInvite(db, profile.id, c.req.param("token")));
   });
 
-  app.post("/api/shifts/:id/signup", auth(), (c) => {
+  app.post("/api/shifts/:id/signup", auth(), writeLimit("shift-signup", 20, 60_000), (c) => {
     const profile = c.get("profile")!;
     const result = signupShift(db, profile.id, c.req.param("id"));
     if (result.status !== "already") {
@@ -590,7 +607,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json({ projects: listProjects(db, profile.id, c.req.param("id")) });
   });
 
-  app.post("/api/leagues/:id/projects", auth(), async (c) => {
+  app.post("/api/leagues/:id/projects", auth(), writeLimit("project-submit", 10, 60_000), async (c) => {
     const profile = c.get("profile")!;
     const parsed = projectSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
@@ -642,7 +659,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json(reverseLedgerEntry(db, profile.id, c.req.param("entryId"), parsed.success ? (parsed.data.note ?? "") : ""));
   });
 
-  app.post("/api/leagues/:id/resources", auth(), async (c) => {
+  app.post("/api/leagues/:id/resources", auth(), writeLimit("resource-post", 20, 60_000), async (c) => {
     const profile = c.get("profile")!;
     const parsed = resourceSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
@@ -653,7 +670,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json(resource, 201);
   });
 
-  app.post("/api/resources/:id/claim", auth(), (c) => {
+  app.post("/api/resources/:id/claim", auth(), writeLimit("resource-claim", 30, 60_000), (c) => {
     const profile = c.get("profile")!;
     const resource = claimResource(db, profile.id, c.req.param("id"));
     recordPulseEvent(db, "resource_claim", { profileId: profile.id, leagueId: resource.league });
