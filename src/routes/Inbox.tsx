@@ -145,7 +145,7 @@ export default function Inbox() {
       </p>
 
       {isPending ? (
-        <div className="space-y-3" aria-label="Loading inbox">
+        <div role="status" className="space-y-3" aria-label="Loading inbox">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="border-ink/15 border-2 p-4">
               <div className="bg-paper-3 h-3 w-28 animate-pulse rounded" />
@@ -186,7 +186,10 @@ export default function Inbox() {
                     <span className="kicker text-ink-3 text-[8px]">{meta.label}</span>
                     <span className="text-ink-3 font-mono text-[9px]">{when(note.createdAt)}</span>
                     {unreadNote && (
-                      <span className="bg-vermilion inline-block h-1.5 w-1.5 rounded-full" aria-label="Unread" />
+                      <>
+                        <span className="bg-vermilion inline-block h-1.5 w-1.5 rounded-full" aria-hidden />
+                        <span className="sr-only">Unread</span>
+                      </>
                     )}
                   </div>
                   <Link

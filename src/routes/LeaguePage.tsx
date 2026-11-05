@@ -154,9 +154,9 @@ export default function LeaguePage() {
 
       <div className="border-ink mt-8 grid grid-cols-2 border-y-2 md:grid-cols-4">
         {[
-          { label: "Projects", value: fmt(l.projects), color: "#d9381e" },
+          { label: "Projects", value: fmt(l.projects), color: "#b82d19" },
           { label: "Hours given", value: `${(l.hours / 1000).toFixed(1)}k`, color: "#2347c5" },
-          { label: "Week streak", value: l.streak, color: "#1b7f5c" },
+          { label: "Week streak", value: l.streak, color: "#14694d" },
           { label: "Justice Points", value: fmt(l.points), color: "#14110d" },
         ].map((stat, index) => (
           <div key={stat.label} className={cn("px-1 py-3.5 md:px-3", index > 0 && "border-ink border-l")}>

@@ -108,14 +108,14 @@ export function Lead() {
             decimals={1}
             suffix="t"
             label="Waste hauled"
-            color="#1b7f5c"
+            color="#14694d"
           />
           <LeadStat
             run={seen}
             icon={<CalendarCheck size={20} />}
             value={l.projects}
             label="Projects done"
-            color="#d9381e"
+            color="#b82d19"
           />
           <LeadStat run={seen} icon={<Sparkles size={20} />} value={l.points} label="Justice Points" color="#14110d" />
         </div>
@@ -196,7 +196,7 @@ export function Wins() {
                     </Photo>
                     <div
                       className="border-ink text-paper absolute -top-3 -right-3 grid h-14 w-14 place-items-center rounded-full border-2 font-mono text-sm leading-none font-semibold shadow-[2px_2px_0_#14110d] transition-transform duration-700 group-hover:rotate-[360deg]"
-                      style={{ background: c.color === "#14110d" ? "#d9381e" : c.color }}
+                      style={{ background: c.color === "#14110d" ? "#b82d19" : c.color }}
                     >
                       <span className="text-center">
                         <span className="block text-[9px] opacity-80">JP</span>+{w.jp}

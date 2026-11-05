@@ -81,7 +81,7 @@ export function Drawer() {
             <div>
               <div
                 className="kicker flex items-center gap-1.5"
-                style={{ color: color === "#14110d" ? "#d9381e" : color }}
+                style={{ color: color === "#14110d" ? "#b82d19" : color }}
               >
                 <c.icon size={12} /> {c.label} League
               </div>
@@ -127,7 +127,7 @@ export function Drawer() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <Sparkles size={15} className="text-vermilion" fill="#d9381e" />
+                <Sparkles size={15} className="text-vermilion" fill="#b82d19" />
                 <span className="font-display text-4xl leading-none font-black">{fmt(l.points)}</span>
               </div>
               <Sparkline data={l.trend} color={color} w={200} h={40} className="mt-2 w-full" />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Building2, Check, Feather, Home, Landmark, Stamp, type LucideIcon } from "lucide-react";
-import { CAUSES, CAUSE_KEYS, type Cause } from "../data";
+import { CAUSES, CAUSE_KEYS, onColor, type Cause } from "../data";
 import { Emblem, type EmblemShape } from "../ui";
 import { useApp } from "../ctx";
 import { cn } from "../utils/cn";
@@ -67,6 +67,8 @@ export function Charter() {
                     <button
                       key={k}
                       onClick={() => setCause(k)}
+                      aria-label={cc.label}
+                      aria-pressed={on}
                       title={cc.label}
                       className={cn(
                         "group relative flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border-2 transition-all duration-300",
@@ -77,13 +79,14 @@ export function Charter() {
                       <Icon
                         size={26}
                         className={cn("transition-transform duration-300", on ? "scale-110" : "group-hover:scale-110")}
-                        style={{ color: on ? "#f4eee1" : col }}
+                        style={{ color: on ? onColor(col) : col }}
                       />
                       <span
                         className={cn(
                           "font-sans text-[10px] font-extrabold tracking-wider uppercase transition-opacity",
                           on ? "opacity-100" : "opacity-0 group-hover:opacity-70",
                         )}
+                        style={on ? { color: onColor(col) } : undefined}
                       >
                         {cc.label}
                       </span>
@@ -102,6 +105,8 @@ export function Charter() {
                     <button
                       key={s}
                       onClick={() => setShape(s)}
+                      aria-label={`Emblem shape: ${s}`}
+                      aria-pressed={shape === s}
                       className={cn(
                         "rounded-xl border-2 p-2.5 transition-all duration-300",
                         shape === s
@@ -124,6 +129,8 @@ export function Charter() {
                       <button
                         key={s.k}
                         onClick={() => setScale(s.k)}
+                        aria-label={`League scale: ${s.label}`}
+                        aria-pressed={on}
                         title={s.label}
                         className={cn(
                           "flex flex-1 flex-col items-center gap-2 rounded-xl border-2 py-3 transition-all duration-300",
@@ -206,8 +213,8 @@ export function Charter() {
                   </h3>
                   <div className="mt-3 flex items-center gap-3 font-sans text-[10px] font-extrabold tracking-wider uppercase">
                     <span
-                      className="text-paper flex items-center gap-1.5 rounded-full px-2.5 py-1"
-                      style={{ background: color }}
+                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                      style={{ background: color, color: onColor(color) }}
                     >
                       <c.icon size={12} /> {c.label}
                     </span>

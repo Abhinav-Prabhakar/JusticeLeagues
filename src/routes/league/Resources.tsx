@@ -325,7 +325,7 @@ function ResourceCard({
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <span
           className="kicker -rotate-2 border-2 px-2 py-0.5 text-[8px]"
-          style={{ borderColor: offer ? "#1b7f5c" : "#d9381e", color: offer ? "#1b7f5c" : "#d9381e" }}
+          style={{ borderColor: offer ? "#14694d" : "#b82d19", color: offer ? "#14694d" : "#b82d19" }}
         >
           {offer ? "Offering" : "Wanted"}
         </span>

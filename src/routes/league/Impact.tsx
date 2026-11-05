@@ -85,7 +85,7 @@ export default function LeagueImpact() {
 
       <div className="border-ink grid grid-cols-2 border-y-2 md:grid-cols-4">
         {[
-          { icon: CalendarCheck, value: fmt(totals?.projects ?? l.projects), label: "Projects delivered", tone: "#d9381e" },
+          { icon: CalendarCheck, value: fmt(totals?.projects ?? l.projects), label: "Projects delivered", tone: "#b82d19" },
           {
             icon: Hourglass,
             value: `${((totals?.hours ?? l.hours) / 1000).toFixed(1)}k`,
@@ -93,7 +93,7 @@ export default function LeagueImpact() {
             tone: "#2347c5",
           },
           { icon: Users, value: fmt(l.members), label: "Members", tone: color },
-          { icon: Sparkles, value: fmt(totals?.points ?? l.points), label: "Justice Points", tone: "#1b7f5c" },
+          { icon: Sparkles, value: fmt(totals?.points ?? l.points), label: "Justice Points", tone: "#14694d" },
         ].map((stat, index) => (
           <div
             key={stat.label}
@@ -334,7 +334,7 @@ export default function LeagueImpact() {
                       className="border-ink border-2 border-b-0 transition-colors"
                       style={{
                         height: `${Math.max((Math.abs(month.points) / monthPeak) * 100, 2)}%`,
-                        background: month.points < 0 ? "#d9381e" : color,
+                        background: month.points < 0 ? "#b82d19" : color,
                       }}
                       title={`${month.label}: ${fmt(month.points)} JP`}
                     />

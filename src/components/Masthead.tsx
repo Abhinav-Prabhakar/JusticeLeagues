@@ -27,7 +27,7 @@ function PulseRing() {
             cy="36"
             r={r}
             fill="none"
-            stroke="#d9381e"
+            stroke="#b82d19"
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={c}
@@ -65,7 +65,7 @@ function PointsEar() {
       </div>
       <Sparkline
         data={[12, 14, 13, 18, 22, 21, 27, 33, 31, 40, 46, 52]}
-        color="#d9381e"
+        color="#b82d19"
         w={150}
         h={26}
         play={seen}
@@ -212,6 +212,8 @@ export function Nav() {
                 }
               }}
               aria-label="Find a league"
+              aria-hidden={!searching}
+              tabIndex={searching ? 0 : -1}
               placeholder="Find a league…"
               className="placeholder:text-ink-3 w-full bg-transparent pr-3 font-sans text-sm outline-none"
             />

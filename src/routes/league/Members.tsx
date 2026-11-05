@@ -49,7 +49,7 @@ export default function LeagueMembers() {
       </p>
 
       {isPending ? (
-        <div className="divide-ink/20 border-ink divide-y-2 border-y-2" aria-label="Loading roster">
+        <div role="status" className="divide-ink/20 border-ink divide-y-2 border-y-2" aria-label="Loading roster">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 py-4">
               <div className="bg-paper-3 h-10 w-10 animate-pulse rounded-full" />

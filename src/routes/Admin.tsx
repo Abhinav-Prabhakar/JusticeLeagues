@@ -590,7 +590,7 @@ function AuditLog() {
 
 function Skeleton({ label }: { label: string }) {
   return (
-    <div className="space-y-3" aria-label={label}>
+    <div role="status" className="space-y-3" aria-label={label}>
       {Array.from({ length: 3 }).map((_, index) => (
         <div key={index} className="border-ink/15 border-2 p-4">
           <div className="bg-paper-3 h-3 w-28 animate-pulse rounded" />

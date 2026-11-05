@@ -42,7 +42,7 @@ export function Footer() {
               { to: "/terms", label: "House rules" },
               { to: "/privacy", label: "Privacy & data" },
             ].map((item) => (
-              <Link key={item.to} to={item.to} className="kicker text-ink-2 hover:text-vermilion transition-colors">
+              <Link key={item.to} to={item.to} className="kicker text-ink-2 hover:text-vermilion inline-flex min-h-6 items-center px-1 transition-colors">
                 {item.label}
               </Link>
             ))}

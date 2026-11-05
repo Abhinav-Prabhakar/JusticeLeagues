@@ -106,16 +106,16 @@ Defined in `src/index.css` under `@theme`. Never hard-code these values.
 | `paper-3` | `#ddd1b5` | rules, empty states |
 | `ink`     | `#14110d` | type, borders       |
 | `ink-2`   | `#4a4338` | secondary           |
-| `ink-3`   | `#857b6a` | tertiary / captions |
+| `ink-3`   | `#605747` | tertiary / captions (AA on paper-3) |
 
 **Editorial accents**
 
 | Token       | Value     | Use                        |
 | ----------- | --------- | -------------------------- |
-| `vermilion` | `#d9381e` | breaking, live, energy     |
+| `vermilion` | `#b82d19` | breaking, live, energy (AA text) |
 | `cobalt`    | `#2347c5` | safety / civic             |
 | `mustard`   | `#f2b705` | points, medals, highlights |
-| `forest`    | `#1b7f5c` | climate / positive delta   |
+| `forest`    | `#14694d` | climate / positive delta (AA text) |
 | `rose`      | `#e0607e` | housing                    |
 | `violet`    | `#7a3fb0` | learning                   |
 | `teal`      | `#0f8b9d` | health                     |

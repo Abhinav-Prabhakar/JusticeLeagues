@@ -95,7 +95,7 @@ export function Atlas() {
                   <div className="pointer-events-none relative z-10 min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <Emblem cause={l.cause} size={18} />
-                      <h4 className="font-display truncate text-lg leading-tight font-bold">{l.name}</h4>
+                      <h3 className="font-display truncate text-lg leading-tight font-bold">{l.name}</h3>
                     </div>
                     <div className="text-ink-2 mt-1 flex items-center gap-3 font-mono text-[11px]">
                       <span className="flex items-center gap-1">

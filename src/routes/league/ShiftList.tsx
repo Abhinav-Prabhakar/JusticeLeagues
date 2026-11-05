@@ -69,7 +69,7 @@ export function ShiftList({ shifts, empty = "No shifts posted this week." }: { s
                   className="border-ink h-2 w-2 rounded-full border"
                   style={{
                     background:
-                      i < Math.round((s.filled / s.spots) * Math.min(s.spots, 10)) ? "#d9381e" : "transparent",
+                      i < Math.round((s.filled / s.spots) * Math.min(s.spots, 10)) ? "#b82d19" : "transparent",
                   }}
                 />
               ))}

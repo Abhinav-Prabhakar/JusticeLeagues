@@ -1,4 +1,5 @@
 import { Hourglass, Flag, Network, HeartHandshake, TrendingUp } from "lucide-react";
+import { onColor } from "../data";
 import { CountUp, Sparkline, useInView } from "../ui";
 
 const STATS = [
@@ -6,7 +7,7 @@ const STATS = [
     icon: Hourglass,
     value: 182440,
     label: "Volunteer hours",
-    color: "#d9381e",
+    color: "#b82d19",
     delta: "+12%",
     data: [8, 10, 9, 13, 15, 14, 19, 22, 21, 27, 31, 36],
   },
@@ -22,7 +23,7 @@ const STATS = [
     icon: Network,
     value: 1208,
     label: "Active leagues",
-    color: "#1b7f5c",
+    color: "#14694d",
     delta: "+21%",
     data: [5, 6, 8, 8, 11, 13, 16, 18, 21, 25, 29, 34],
   },
@@ -50,8 +51,8 @@ export function Numbers() {
             >
               <div className="flex items-center justify-between">
                 <span
-                  className="text-paper grid h-12 w-12 place-items-center rounded-full transition-all duration-500 group-hover:scale-110 group-hover:rotate-[-8deg]"
-                  style={{ background: s.color }}
+                  className="grid h-12 w-12 place-items-center rounded-full transition-all duration-500 group-hover:scale-110 group-hover:rotate-[-8deg]"
+                  style={{ background: s.color, color: onColor(s.color) }}
                 >
                   <Icon size={22} />
                 </span>

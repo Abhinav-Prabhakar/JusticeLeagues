@@ -14,7 +14,7 @@ import {
   Wind,
   type LucideIcon,
 } from "lucide-react";
-import { CAUSES, weekDays, type Bring } from "../data";
+import { CAUSES, onColor, weekDays, type Bring } from "../data";
 import { Emblem, SectionHead } from "../ui";
 import { useApp } from "../ctx";
 import { useEdition, useCancelShift, useSignupShift } from "../lib/queries";
@@ -88,7 +88,7 @@ export function Dispatch() {
                   className={cn(
                     "group border-ink relative flex flex-col items-center gap-1.5 border-2 px-1 pt-2 pb-3 transition-all duration-300",
                     on
-                      ? "bg-ink text-paper -translate-y-1 shadow-[4px_4px_0_#d9381e]"
+                      ? "bg-ink text-paper -translate-y-1 shadow-[4px_4px_0_#b82d19]"
                       : "bg-paper hover:bg-paper-2 hover:-translate-y-0.5",
                   )}
                 >
@@ -175,8 +175,8 @@ export function Dispatch() {
                 style={{ animationDelay: `${i * 70}ms` }}
               >
                 <div
-                  className="border-ink text-paper relative flex w-24 shrink-0 flex-col items-center justify-center gap-1 border-r-2 border-dashed px-2 py-3 md:w-28"
-                  style={{ background: c.color }}
+                  className="border-ink relative flex w-24 shrink-0 flex-col items-center justify-center gap-1 border-r-2 border-dashed px-2 py-3 md:w-28"
+                  style={{ background: c.color, color: onColor(c.color) }}
                 >
                   <Icon
                     size={22}
@@ -193,7 +193,7 @@ export function Dispatch() {
                 <div className="min-w-0 flex-1 px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h4 className="font-display text-lg leading-tight font-bold md:text-xl">{s.title}</h4>
+                      <h3 className="font-display text-lg leading-tight font-bold md:text-xl">{s.title}</h3>
                       <div className="mt-1 flex items-center gap-2">
                         <Emblem cause={l.cause} size={18} />
                         <span className="text-ink-3 truncate font-sans text-[10px] font-bold tracking-wider uppercase">

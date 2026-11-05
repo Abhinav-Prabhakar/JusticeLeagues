@@ -105,9 +105,9 @@ export default function LeagueOverview() {
           />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
-              { icon: CalendarCheck, value: fmt(l.projects), label: "Projects done", tone: "#d9381e" },
+              { icon: CalendarCheck, value: fmt(l.projects), label: "Projects done", tone: "#b82d19" },
               { icon: Hourglass, value: `${(l.hours / 1000).toFixed(1)}k`, label: "Hours given", tone: "#2347c5" },
-              { icon: Flame, value: l.streak, label: "Week streak", tone: "#1b7f5c" },
+              { icon: Flame, value: l.streak, label: "Week streak", tone: "#14694d" },
               { icon: Users, value: fmt(l.members), label: "Members", tone: color },
             ].map((stat) => (
               <div key={stat.label} className="border-ink border-2 p-4">

@@ -40,7 +40,7 @@ export default function JoinInvite() {
 
   if (preview.isPending) {
     return (
-      <div className="mx-auto mt-10 max-w-2xl" aria-label="Loading invitation">
+      <div role="status" className="mx-auto mt-10 max-w-2xl" aria-label="Loading invitation">
         <div className="bg-paper-3 h-3 w-32 animate-pulse rounded" />
         <div className="bg-paper-3 mt-4 h-12 w-3/4 animate-pulse rounded" />
         <div className="bg-paper-3 mt-6 h-40 w-full animate-pulse rounded" />

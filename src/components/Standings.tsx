@@ -174,7 +174,7 @@ export function Standings() {
                 <div className="relative flex items-center gap-3">
                   <span
                     className="font-display w-8 shrink-0 text-center text-3xl leading-none font-black"
-                    style={{ color: index < 3 ? undefined : "#857b6a" }}
+                    style={{ color: index < 3 ? undefined : "#605747" }}
                   >
                     {index < 3 ? (
                       <span

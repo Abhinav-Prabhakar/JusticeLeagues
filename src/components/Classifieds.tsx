@@ -35,7 +35,7 @@ function ClassifiedCard({ resource }: { resource: ResourceDTO }) {
       <div className="flex items-start justify-between">
         <span
           className="kicker -rotate-2 border-2 px-2 py-1 transition-transform duration-300 group-hover:rotate-0"
-          style={{ borderColor: offer ? "#1b7f5c" : "#d9381e", color: offer ? "#1b7f5c" : "#d9381e" }}
+          style={{ borderColor: offer ? "#14694d" : "#b82d19", color: offer ? "#14694d" : "#b82d19" }}
         >
           {offer ? "Offering" : "Wanted"}
         </span>

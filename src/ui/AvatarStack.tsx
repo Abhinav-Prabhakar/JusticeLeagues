@@ -1,4 +1,4 @@
-const AV = ["#d9381e", "#2347c5", "#f2b705", "#1b7f5c", "#7a3fb0", "#e0607e"];
+const AV = ["#b82d19", "#2347c5", "#f2b705", "#14694d", "#7a3fb0", "#e0607e"];
 
 export function AvatarStack({ n = 5, size = 24, extra }: { n?: number; size?: number; extra?: string }) {
   return (

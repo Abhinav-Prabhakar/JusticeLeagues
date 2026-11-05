@@ -53,7 +53,7 @@ export function ProjectReview() {
       </p>
 
       {isPending ? (
-        <div className="border-ink/20 space-y-2 border-y-2 py-4" aria-label="Loading projects">
+        <div role="status" className="border-ink/20 space-y-2 border-y-2 py-4" aria-label="Loading projects">
           {Array.from({ length: 2 }).map((_, index) => (
             <div key={index} className="border-ink/15 border-2 p-4">
               <div className="bg-paper-3 h-3 w-32 animate-pulse rounded" />

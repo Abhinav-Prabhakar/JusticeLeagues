@@ -102,7 +102,7 @@ function MapArt() {
       <g transform="translate(562 46)">
         <circle r="22" fill="#f4eee1" stroke="#14110d" strokeWidth="1.5" />
         <path d="M0 -17 L5 0 L0 17 L-5 0 Z" fill="#14110d" />
-        <path d="M0 -17 L5 0 L-5 0 Z" fill="#d9381e" />
+        <path d="M0 -17 L5 0 L-5 0 Z" fill="#b82d19" />
         <text y="-26" textAnchor="middle" fontFamily="Playfair Display, serif" fontWeight="900" fontSize="11">
           N
         </text>
@@ -198,7 +198,7 @@ function Pin({
         </div>
         <div className="text-ink-2 mt-1 flex items-center justify-between font-mono text-[10px] font-semibold">
           <span className="flex items-center gap-1">
-            <Sparkles size={10} className="text-vermilion" fill="#d9381e" />
+            <Sparkles size={10} className="text-vermilion" fill="#b82d19" />
             {fmt(l.points)}
           </span>
           <span className="flex items-center gap-1">

@@ -13,11 +13,11 @@ const ROWS: {
   color: string;
   filled: number;
 }[] = [
-  { icon: TreePine, label: "Trees planted", total: 9400, per: 500, unit: "trees", color: "#1b7f5c", filled: 19 },
+  { icon: TreePine, label: "Trees planted", total: 9400, per: 500, unit: "trees", color: "#14694d", filled: 19 },
   { icon: Utensils, label: "Meals served", total: 412000, per: 20000, unit: "meals", color: "#e8a200", filled: 21 },
   { icon: Lightbulb, label: "Streetlights fixed", total: 1360, per: 80, unit: "lights", color: "#2347c5", filled: 17 },
   { icon: Recycle, label: "Tons of waste", total: 228, per: 12, unit: "tons", color: "#0f8b9d", filled: 19 },
-  { icon: Route, label: "Km of safe lanes", total: 38, per: 2, unit: "km", color: "#d9381e", filled: 15 },
+  { icon: Route, label: "Km of safe lanes", total: 38, per: 2, unit: "km", color: "#b82d19", filled: 15 },
 ];
 const GOAL = 24;
 

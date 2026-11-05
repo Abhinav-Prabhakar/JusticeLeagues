@@ -504,7 +504,7 @@ export default function LeagueSteward() {
           </div>
 
           {roster.isPending && activeId ? (
-            <div className="divide-ink/15 divide-y" aria-label="Loading roster">
+            <div role="status" className="divide-ink/15 divide-y" aria-label="Loading roster">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-5 py-4">
                   <div className="bg-paper-3 h-9 w-9 animate-pulse rounded-full" />

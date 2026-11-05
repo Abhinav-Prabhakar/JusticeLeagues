@@ -153,7 +153,7 @@ export default function LedgerPage() {
         )}
 
         {isPending ? (
-          <div className="divide-ink/15 border-ink divide-y-2 border-y-2" aria-label="Loading the record">
+          <div role="status" className="divide-ink/15 border-ink divide-y-2 border-y-2" aria-label="Loading the record">
             {Array.from({ length: 6 }).map((_, index) => (
               <div key={index} className="flex items-center gap-4 py-4">
                 <div className="bg-paper-3 h-3 w-20 animate-pulse rounded" />

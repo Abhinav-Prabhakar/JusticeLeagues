@@ -29,8 +29,8 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 const TONES: Record<string, { bg: string; text: string }> = {
-  milestone: { bg: "#2347c5", text: "#1b7f5c" },
-  streak: { bg: "#d9381e", text: "#d9381e" },
+  milestone: { bg: "#2347c5", text: "#14694d" },
+  streak: { bg: "#b82d19", text: "#b82d19" },
   craft: { bg: "#14110d", text: "#14110d" },
   role: { bg: "#e8a200", text: "#c0763a" },
 };
