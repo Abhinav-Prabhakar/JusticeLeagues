@@ -9,6 +9,7 @@ import { opsHealth } from "./db/ops";
 import {
   PAGE_EVENTS,
   addPilotNote,
+  countOpenErrors,
   listErrorReports,
   listPilotNotes,
   pulseMetrics,
@@ -926,6 +927,7 @@ export function createApp(db: Db): Hono<{ Variables: Variables }> {
     return c.json({
       ...pulseMetrics(db, { days: parsed.data.days }),
       health: opsHealth(db, dbPath),
+      openErrors: countOpenErrors(db),
       errors: listErrorReports(db, 8, true),
       notes: listPilotNotes(db, 8),
     });

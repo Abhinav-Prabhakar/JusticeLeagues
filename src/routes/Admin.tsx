@@ -347,7 +347,7 @@ function Pulse() {
               value={`${ageLabel(data.health.backupAgeHours)} · ${data.health.backupCount}`}
             />
             <HealthStat label="Uptime" value={`${Math.max(1, Math.round(data.health.uptimeSeconds / 3600))}h`} />
-            <HealthStat label="Open crashes" value={`${data.errors.length}`} />
+            <HealthStat label="Open crashes" value={`${data.openErrors}`} />
           </div>
           <p className="border-ink/15 text-ink-3 border-t px-4 py-2.5 font-mono text-[9px]">
             {data.health.latestBackupAt

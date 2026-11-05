@@ -133,6 +133,13 @@ export function resolveErrorReport(db: Db, actorId: string, id: string): { resol
   return { resolved: true as const };
 }
 
+export function countOpenErrors(db: Db): number {
+  const row = db.prepare("SELECT COUNT(*) AS count FROM error_reports WHERE resolved_at IS NULL").get() as {
+    count: number;
+  };
+  return Number(row.count);
+}
+
 function countEvents(db: Db, name: PulseEventName, since: string): number {
   const row = db
     .prepare("SELECT COUNT(*) AS count FROM pulse_events WHERE event_name = ? AND created_at >= ?")

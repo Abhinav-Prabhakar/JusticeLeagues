@@ -630,6 +630,8 @@ export interface PilotNoteDTO {
 
 export interface PulseDTO extends PulseMetricsDTO {
   health: OpsHealthDTO;
+  /** Total open crash reports; `errors` carries only the latest few. */
+  openErrors: number;
   errors: ErrorReportDTO[];
   notes: PilotNoteDTO[];
 }
