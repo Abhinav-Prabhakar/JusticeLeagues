@@ -300,6 +300,7 @@ test("a steward's invitation link brings a neighbour onto the roster", async ({ 
     await guest.getByLabel("Display name").fill("Nia Invited");
     await guest.getByLabel("Email", { exact: true }).fill(uniqueEmail("invitee"));
     await guest.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await guest.getByLabel(/i am 16 or older/i).check();
     await guest.getByRole("button", { name: /open account/i }).click();
 
     await expect(guest).toHaveURL(/\/join\//);

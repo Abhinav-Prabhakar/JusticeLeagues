@@ -96,6 +96,7 @@ test("a newcomer finds a league within 5 km and joins it", async ({ page }) => {
   await page.getByLabel("Display name").fill("New Neighbour");
   await page.getByLabel("Email", { exact: true }).fill(`newcomer-${Date.now()}@example.com`);
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery");
+  await page.getByLabel(/i am 16 or older/i).check();
   await page.getByRole("button", { name: /open account/i }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
