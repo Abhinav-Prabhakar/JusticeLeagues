@@ -34,6 +34,9 @@ Future agent sessions: read this before touching the repo.
 npm run dev          # web :5173 · api :8787
 npm run test         # unit + API integration
 npm run test:e2e     # isolated :8788 / :5174 / data/e2e.db
+npm run load         # capacity + leaderboard drill on data/load.db
 npm run db:reset     # rebuild the local database
+npm run db:backup    # verified snapshot in data/backups/
+npm run ops:check    # integrity, backup age, open crash reports
 npm run shots:readme # regenerate docs/screenshots (needs demo server)
 ```

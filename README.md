@@ -6,7 +6,7 @@
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/stargazers"><img src="https://img.shields.io/github/stars/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=f2b705" alt="Stars" /></a>
   <a href="https://github.com/Abhinav-Prabhakar/JusticeLeagues/commits/main"><img src="https://img.shields.io/github/last-commit/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=14694d" alt="Last commit" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Abhinav-Prabhakar/JusticeLeagues?style=flat-square&labelColor=14110d&color=b82d19" alt="License" /></a>
-  <img src="https://img.shields.io/badge/tests-113_unit_%C2%B7_28_e2e-14694d?style=flat-square&labelColor=14110d" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-127_unit_%C2%B7_32_e2e-14694d?style=flat-square&labelColor=14110d" alt="Tests" />
   <img src="https://img.shields.io/badge/react-19-2347c5?style=flat-square&labelColor=14110d" alt="React 19" />
   <img src="https://img.shields.io/badge/typescript-strict-2347c5?style=flat-square&labelColor=14110d" alt="TypeScript" />
   <img src="https://img.shields.io/badge/sqlite-local_only-f2b705?style=flat-square&labelColor=14110d" alt="SQLite" />
@@ -47,6 +47,9 @@
 - **An editor's desk for strangers.** The [`/admin`](src/routes/Admin.tsx) console lists open reports, people, feature flags, and the audit log. Three upheld strikes pause posting for a fortnight; the editor can restore early. Every action writes an audit row.
 - **Safeguarding by default.** Registration needs an age confirmation; 16- and 17-year-olds need guardian consent, and their handle and email are withheld from every public roster, ledger entry, and admin row.
 - **Your data, in your hands.** [`/privacy`](src/routes/Privacy.tsx) explains exactly what the local paper keeps, exports it as JSON, and deletes the account while anonymising the ledger. [`/terms`](src/routes/Terms.tsx) is the house rules in plain language.
+- **A private pulse, not a tracker.** Page views are an allowlist of six page names; actions are authored by the server. No IP, user agent, cookie, or third-party SDK. The editor's **Admin → Pulse** tab turns that into activation, liquidity, reliability, retention, integrity, and the pilot three on one screen.
+- **A crash desk with a name on it.** A rendering error posts its trace to the local API, and the editor closes the report from the same tab. The response's request id is on every line of the structured log.
+- **A backup you have restored, not just made.** `npm run db:backup` writes a verified `VACUUM INTO` snapshot; `npm run db:restore` keeps a safety copy first. [`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the drill, rollback policy, and Monday pilot loop.
 - **WCAG 2.2 AA, not aspirational.** Every route scores 100 in Lighthouse accessibility: keyboard reachable, focus visible, touch targets sized, contrast checked, headings in order.
 - **A real impact page.** Chapter, category, and month totals are aggregated from the ledger, and the chapter bars always sum to the league total.
 - **Server-authored Justice Points.** Append-only ledger. Joining awards +25 once; signup mints nothing; check-in awards hours × 12 (capped at 80); an approved project awards `50 + 4×hours + 2×people`, clamped 50–500.
@@ -117,6 +120,7 @@
 | Data   | `node:sqlite` · plain-SQL migrations · append-only points ledger  |
 | Ranks  | `league_standings` / `chapter_standings` caches, rebuilt on write |
 | Search | `league_search` FTS5 cache + haversine distance in the API        |
+| Ops    | JSON logs · verified `VACUUM INTO` backups · private pulse funnel |
 | Assets | Photography and fonts vendored into `public/` — fully offline     |
 
 Points flow one way: an action hits a Hono route, the repository validates it,
@@ -159,7 +163,20 @@ Local data lives in `data/justice-leagues.db`.
 ```bash
 npm run db:seed    # migrate + seed if empty
 npm run db:reset   # throw the paper away and rebuild it
+npm run db:backup  # verified snapshot → data/backups/
+npm run db:restore # latest snapshot (or pass a file)
+npm run ops:check  # integrity, migrations, backups, open crashes
+npm run load       # capacity race + leaderboard drill on data/load.db
 ```
+
+Logs are JSON on stdout. To keep them:
+
+```bash
+LOG_LEVEL=warn LOG_FILE=data/logs/app.ndjson npm start
+```
+
+The full drill, rollback plan, incident template, and pilot checklist live in
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ### Demo stewards
 
@@ -179,8 +196,10 @@ Swap `harbor` for any league id (`spoke`, `ridgeline`, `civic`, …) and `1`–`
 ```bash
 npm run typecheck
 npm run lint
-npm run test       # 113 unit + API integration tests
-npm run test:e2e   # 28 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run test       # 127 unit + API integration tests
+npm run test:e2e   # 32 Playwright tests, isolated :8788 / :5174 / data/e2e.db
+npm run load       # capacity race + 200 leaderboard reads on data/load.db
+npm run ops:check  # integrity, backup age, unresolved crashes
 npm run shots      # design-review screenshots → /tmp/jl-shots
 ```
 

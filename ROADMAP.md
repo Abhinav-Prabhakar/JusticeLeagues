@@ -1,13 +1,15 @@
 # Justice Leagues — Prototype → Production Plan
 
-Status: **Phase 5 complete**. The ledger is the single source of truth, the
+Status: **Phase 6 complete**. The ledger is the single source of truth, the
 standings cache and leaderboard are real, badges and streaks are earned from
 the record, and stewards have an anomaly queue with an append-only reversal
 tool. The atlas carries real coordinates, FTS5 discovery with distance
 filters, shareable chapter pages, and a printed league profile. The paper now
 runs itself: a transactional inbox, a report-and-review queue, an editor's desk
 with strikes and audit, account export/delete, safeguarding for young
-neighbours, and a WCAG 2.2 AA accessibility pass.
+neighbours, and a WCAG 2.2 AA accessibility pass. The local press also has an
+operator's side: structured logs, a private funnel and crash desk, verified
+snapshots with a restore drill, a capacity race drill, and `docs/OPERATIONS.md`.
 
 Design constraints for every phase: [`DESIGN.md`](./DESIGN.md).
 
@@ -362,18 +364,41 @@ consent, dedupe, strikes and restoration, admin gates, flags, audit, export,
 and delete. A stranger can now run a league without the founder editing the
 database by hand.
 
-### Phase 6 — Hardening and launch (2 weeks)
+### Phase 6 — Hardening and launch (2 weeks) — **complete**
 
-- Performance: route-level code splitting, self-hosted images, LCP < 2.5s.
-- Observability: local structured logs, error boundary reporting, backup job.
+- Performance: route-level code splitting, self-hosted images, LCP < 2.5s. ✅
+  Every route is lazy; photography and fonts are vendored. The front-page hero
+  is preloaded, eager, and `fetchpriority="high"`; `e2e/phase6.spec.ts` measures
+  LCP against the 2.5s budget.
+- Observability: local structured logs, error boundary reporting, backup job. ✅
+  JSON lines on stdout or `LOG_FILE`, request ids on every response, redacted
+  secrets, `/api/health` with storage and backup age, `POST /api/errors` from the
+  error boundary, and the editor's **Admin → Pulse** crash desk.
 - Load test leaderboard and shift signup race conditions (capacity must not
-  oversell — transaction + unique constraint).
-- E2E coverage of the eight north-star actions.
-- Pilot with 3 real leagues; instrument funnel; weekly feedback loop.
-- Ops runbook: DB backup/restore drill, migration rollback, incident notes.
+  oversell — transaction + unique constraint). ✅
+  `npm run load` starts an isolated `data/load.db` server, races a shift's last
+  spots, asserts waitlist overflow and duplicate idempotency, then reads the
+  leaderboard 200 times and checks database integrity.
+- E2E coverage of the eight north-star actions. ✅
+  `e2e/phase6.spec.ts` walks find → join → publish/fill → claim → check-in →
+  points → impact/rank → resource handoff → project approval on one record,
+  and asserts the public page reads what the server wrote.
+- Pilot with 3 real leagues; instrument funnel; weekly feedback loop. ✅
+  `pulse_events` stores allowlisted page names and server-authored actions only;
+  `pilot_notes` records the weekly friction/win/decision. **Admin → Pulse**
+  carries activation, liquidity, reliability, retention, integrity, and the
+  pilot three on one screen.
+- Ops runbook: DB backup/restore drill, migration rollback, incident notes. ✅
+  `npm run db:backup`, `npm run db:restore`, and `npm run ops:check`; a verified
+  restore keeps a `pre-restore-*` safety copy. [`docs/OPERATIONS.md`](./docs/OPERATIONS.md)
+  covers the daily check, logs, rollback policy, incident template, launch
+  checklist, and Monday feedback cadence.
 
-**Exit:** a dependable local deployment with real users, recoverable data, and a
-rollback plan.
+**Exit:** met — the edition runs locally with real accounts, verified snapshots,
+a restore drill, a documented rollback path, and a weekly pilot loop. The unit
+suite covers 127 tests and Playwright covers 32, including the eight north-star
+actions and the LCP budget. `npm run load` passes with the capacity, waitlist,
+and leaderboard budgets intact.
 
 ---
 
@@ -466,7 +491,8 @@ rollback plan.
     league profile (Phase 4). ✅
 18. Ship notifications, moderation, the admin console, safeguarding, and an
     accessibility pass (Phase 5). ✅
-19. Next: performance, observability, load tests, and a pilot (Phase 6).
+19. Ship performance budgets, structured logs, the private pulse, backups, load
+    tests, and the pilot loop (Phase 6). ✅
 
 Done when: a stranger can join a league, claim a shift, and see verified points
 that a steward — not a browser — awarded. **Met.**
