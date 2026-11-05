@@ -1,0 +1,1 @@
+import{j as r}from"./index-B6CALLPa.js";import{A as t}from"./AuthForm-_9G6h4WC.js";import"./user-plus-BJ7Q2GYa.js";import"./key-round-CoB7B0Bm.js";function s(){return r.jsx(t,{mode:"register"})}export{s as default};
