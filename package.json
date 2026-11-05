@@ -26,6 +26,10 @@
     "e2e:web": "API_PORT=8788 vite --port 5174 --strictPort",
     "db:seed": "tsx server/db/cli.ts seed",
     "db:reset": "tsx server/db/cli.ts reset",
+    "db:backup": "tsx server/db/cli.ts backup",
+    "db:restore": "tsx server/db/cli.ts restore",
+    "ops:check": "tsx server/db/cli.ts check",
+    "load": "node scripts/load-test.mjs",
     "vendor:assets": "node scripts/vendor-assets.mjs",
     "shots": "node scripts/screenshots.mjs",
     "shots:readme": "node scripts/readme-shots.mjs"
