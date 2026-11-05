@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MapPin, ShieldCheck, UserRound, Users, X } from "lucide-react";
 import { CAUSES, fmt } from "../../data";
-import { activeMembership } from "../../lib/api";
+import { activeMembership, handleLabel } from "../../lib/api";
 import { useLeagueDetail, useRemoveMember } from "../../lib/queries";
 import { JoinButton } from "../../components/JoinButton";
 import { SectionHead } from "../../ui";
@@ -99,7 +99,7 @@ export default function LeagueMembers() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="font-display text-lg leading-tight font-bold">{member.profile.displayName}</div>
-                  <div className="text-ink-3 font-mono text-[10px]">@{member.profile.handle}</div>
+                  <div className="text-ink-3 font-mono text-[10px]">{handleLabel(member.profile)}</div>
                 </div>
                 <span className="text-ink-2 flex items-center gap-1 font-mono text-[10px]">
                   <MapPin size={10} /> {chapter?.hood ?? "Citywide"}

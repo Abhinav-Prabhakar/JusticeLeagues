@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Database, Download, Lock, ShieldCheck, Trash2, TriangleAlert } from "lucide-react";
 import { useAuth, useDeleteAccount, useEdition, useExportAccount } from "../lib/queries";
+import { handleLabel } from "../lib/api";
 import { usePageTitle } from "../lib/usePageTitle";
 import { SectionHead } from "../ui";
 import { cn } from "../utils/cn";
@@ -188,7 +189,7 @@ function YourData() {
     <aside className="border-ink bg-paper-2 h-fit border-2 p-4 shadow-[5px_5px_0_#14110d]" aria-label="Your data controls">
       <div className="kicker text-vermilion">Your data</div>
       <h2 className="font-display mt-1 text-xl leading-tight font-black">
-        @{me.profile.handle || me.profile.displayName}
+        {handleLabel(me.profile)}
       </h2>
       <p className="text-ink-2 mt-1 font-mono text-[10px]">{me.profile.email}</p>
 

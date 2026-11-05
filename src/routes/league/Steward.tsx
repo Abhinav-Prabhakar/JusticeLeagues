@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { CAUSES, fmt } from "../../data";
-import { activeMembership } from "../../lib/api";
+import { activeMembership, handleLabel } from "../../lib/api";
 import {
   useCancelShiftAsSteward,
   useCheckIn,
@@ -557,7 +557,7 @@ export default function LeagueSteward() {
                           <div className="font-display truncate text-base leading-tight font-bold">
                             {entry.profile.displayName}
                           </div>
-                          <div className="text-ink-3 font-mono text-[10px]">@{entry.profile.handle}</div>
+                          <div className="text-ink-3 font-mono text-[10px]">{handleLabel(entry.profile)}</div>
                         </div>
 
                         {final ? (

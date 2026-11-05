@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowRight, CalendarClock, MapPin, ShieldCheck, UserRound, Users } from "lucide-react";
-import { STATIC_PREVIEW, STATIC_PREVIEW_MESSAGE } from "../lib/api";
+import { STATIC_PREVIEW, STATIC_PREVIEW_MESSAGE, handleLabel } from "../lib/api";
 import { useEdition, useInvitePreview, useRedeemInvite } from "../lib/queries";
 import { Emblem, Reveal } from "../ui";
 import { usePageTitle } from "../lib/usePageTitle";
@@ -92,7 +92,7 @@ export default function JoinInvite() {
               <MapPin size={11} /> {invite.chapterHood ?? invite.leagueHood}
             </span>
             <span className="flex items-center gap-1">
-              <UserRound size={11} /> {invite.invitedBy ? `from @${invite.invitedBy.handle}` : "from the steward desk"}
+              <UserRound size={11} /> {invite.invitedBy ? `from ${handleLabel(invite.invitedBy)}` : "from the steward desk"}
             </span>
             <span className="text-ink-3">{closed ? "closed" : `expires ${expires}`}</span>
           </div>
@@ -194,7 +194,7 @@ export default function JoinInvite() {
                     <ArrowRight size={12} strokeWidth={3} />
                   </button>
                   <span className="text-ink-3 font-mono text-[9px]">
-                    Signed in as @{me.profile.handle}
+                    Signed in as {handleLabel(me.profile)}
                     {alreadyIn ? " · already on the roster" : ""}
                   </span>
                 </>

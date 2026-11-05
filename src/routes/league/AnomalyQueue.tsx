@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowDownRight, CheckCheck, RotateCcw, ShieldQuestion } from "lucide-react";
 import { fmt } from "../../data";
+import { handleLabel } from "../../lib/api";
 import { useAnomalies, usePublicLedger, useResolveAnomaly, useReverseLedgerEntry } from "../../lib/queries";
 import type { AnomalyDTO } from "../../lib/types";
 import { cn } from "../../utils/cn";
@@ -111,7 +112,7 @@ export function AnomalyQueue({ leagueId }: { leagueId: string }) {
                   </div>
                   <p className="text-ink-2 mt-1 font-serif text-sm">{anomaly.detail}</p>
                   <div className="text-ink-3 mt-1 flex flex-wrap items-center gap-x-3 font-mono text-[10px]">
-                    {anomaly.profile ? <span>@{anomaly.profile.handle}</span> : <span>No profile</span>}
+                    {anomaly.profile ? <span>{handleLabel(anomaly.profile)}</span> : <span>No profile</span>}
                     {!isOpen && (
                       <span className="text-forest">
                         {anomaly.status}
@@ -206,7 +207,7 @@ export function AnomalyQueue({ leagueId }: { leagueId: string }) {
                 </span>
                 <span className="min-w-0 flex-1 truncate font-serif text-sm">{entry.reason}</span>
                 <span className="text-ink-3 font-mono text-[10px]">
-                  {entry.profile ? `@${entry.profile.handle}` : "Imported"}
+                  {entry.profile ? handleLabel(entry.profile) : "Imported"}
                 </span>
                 <button
                   type="button"

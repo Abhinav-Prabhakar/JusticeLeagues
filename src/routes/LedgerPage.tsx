@@ -5,7 +5,7 @@ import { fmt } from "../data";
 import { SectionHead } from "../ui";
 import { usePageTitle } from "../lib/usePageTitle";
 import { useEdition, usePublicLedger } from "../lib/queries";
-import { STATIC_PREVIEW } from "../lib/api";
+import { STATIC_PREVIEW, handleLabel } from "../lib/api";
 import { cn } from "../utils/cn";
 
 const PAGE_SIZE = 25;
@@ -210,7 +210,7 @@ export default function LedgerPage() {
                     </div>
                   </div>
                   <span className="text-ink-2 shrink-0 font-mono text-[10px]">
-                    {entry.profile ? `@${entry.profile.handle}` : "Imported"}
+                    {entry.profile ? handleLabel(entry.profile) : "Imported"}
                   </span>
                 </li>
               );

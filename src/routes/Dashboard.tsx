@@ -6,7 +6,7 @@ import { JoinButton } from "../components/JoinButton";
 import { BadgeShelf, StreakCard } from "../components/BadgeShelf";
 import { usePageTitle } from "../lib/usePageTitle";
 import { useAuth, useEdition, useCancelShift, useSignupShift } from "../lib/queries";
-import { isSignedUp } from "../lib/api";
+import { handleLabel, isSignedUp } from "../lib/api";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -380,7 +380,7 @@ export default function Dashboard() {
         </p>
         {me && (
           <div className="flex items-center gap-3">
-            <span className="text-ink-2 font-mono text-[11px]">{me.profile.handle}</span>
+            <span className="text-ink-2 font-mono text-[11px]">{handleLabel(me.profile)}</span>
             <button
               onClick={() =>
                 logout.mutate(undefined, {
