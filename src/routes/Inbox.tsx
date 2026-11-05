@@ -95,6 +95,7 @@ export default function Inbox() {
   return (
     <div className="space-y-8 pt-6 pb-12">
       <SectionHead
+        level={1}
         kicker="The post"
         title={
           <>

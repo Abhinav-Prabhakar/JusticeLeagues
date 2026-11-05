@@ -14,6 +14,7 @@ export default function Privacy() {
   return (
     <div className="space-y-10 pt-6 pb-14">
       <SectionHead
+        level={1}
         kicker="The small print, plainly"
         title={
           <>

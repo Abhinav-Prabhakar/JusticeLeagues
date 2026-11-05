@@ -6,13 +6,16 @@ export function SectionHead({
   icon,
   right,
   id,
+  level = 2,
 }: {
   kicker: string;
   title: ReactNode;
   icon?: ReactNode;
   right?: ReactNode;
   id?: string;
+  level?: 1 | 2;
 }) {
+  const Heading = level === 1 ? "h1" : "h2";
   return (
     <header id={id} className="mb-6 scroll-mt-24">
       <div className="rule-double" />
@@ -21,7 +24,9 @@ export function SectionHead({
           {icon && <div className="hidden sm:block">{icon}</div>}
           <div>
             <div className="kicker text-vermilion">{kicker}</div>
-            <h2 className="font-display text-4xl leading-none font-black tracking-tight md:text-5xl">{title}</h2>
+            <Heading className="font-display text-4xl leading-none font-black tracking-tight md:text-5xl">
+              {title}
+            </Heading>
           </div>
         </div>
         {right}

@@ -92,6 +92,11 @@ test("two accounts see the same filled spots after refresh", async ({ browser, p
       await page.goto("/leagues/spoke");
       const row = page.locator("div.group").filter({ hasText: "Bike-to-market ride" });
       await expect(row).toBeVisible();
+      // Wait for the live edition, not the demo fixtures rendered while it loads.
+      await expect(row.locator('[aria-label$="spots filled"]')).toHaveAttribute(
+        "aria-label",
+        /^1[1-9] of 15 spots filled$/,
+      );
     }
 
     const spotsA = await pageA

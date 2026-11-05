@@ -99,6 +99,7 @@ export default function Admin() {
   return (
     <div className="space-y-7 pt-6 pb-12">
       <SectionHead
+        level={1}
         kicker="The editor's desk"
         title={
           <>
